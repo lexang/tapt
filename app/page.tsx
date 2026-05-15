@@ -1,5 +1,5 @@
-import { HomePage } from '@/components/home/home-page';
+import ZhHomePage from '@/app/zh/page';
 
 export default function Page() {
-  return <HomePage />;
+  return <ZhHomePage />;
 }

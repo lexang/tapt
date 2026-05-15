@@ -11,3 +11,54 @@ body {
   margin: 0;
   font-family: Arial, Helvetica, sans-serif;
 }
+
+a {
+  color: inherit;
+}
+
+.page-shell {
+  display: grid;
+  gap: 32px;
+  margin: 0 auto;
+  max-width: 1120px;
+  padding: 32px 20px 56px;
+}
+
+.content-section {
+  display: grid;
+  gap: 14px;
+}
+
+.content-section h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.content-section h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.content-section p,
+.content-section li {
+  color: #526070;
+  line-height: 1.7;
+}
+
+.link-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.link-grid a {
+  border: 1px solid #d0d7e2;
+  border-radius: 8px;
+  padding: 12px 14px;
+  text-decoration: none;
+}
+
+.faq-list {
+  display: grid;
+  gap: 16px;
+}
