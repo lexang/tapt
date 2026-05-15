@@ -2,7 +2,11 @@ import type { MetadataRoute } from 'next';
 import { converterPages } from '@/content/converters';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
+  if (!baseUrl) {
+    throw new Error('请设置 NEXT_PUBLIC_SITE_URL 后再生成 sitemap。');
+  }
 
   return [
     {

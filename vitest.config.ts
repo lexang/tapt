@@ -7,6 +7,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    exclude: ['node_modules/**', '.next/**', 'e2e/**', 'test-results/**'],
     globals: true,
   },
   resolve: {
