@@ -38,6 +38,10 @@ export default async function ConverterPage({ params }: ConverterRouteProps) {
 
   return (
     <main className="page-shell">
+      <section className="content-section" aria-labelledby="converter-page-title">
+        <h1 id="converter-page-title">{page.title}</h1>
+        <p>{page.description}</p>
+      </section>
       <ConverterWorkbench initialConverterId={page.slug} />
       <section className="content-section" aria-labelledby="how-to-use">
         <h2 id="how-to-use">如何使用 {page.title}</h2>

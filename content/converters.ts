@@ -9,8 +9,8 @@ export type ConverterPage = ConverterDefinition & {
 
 function createPage(converter: ConverterDefinition): ConverterPage {
   const { inputFormat, outputFormat, title } = converter;
-  const inputLabel = inputFormat.toUpperCase();
-  const outputLabel = outputFormat.toUpperCase();
+  const inputLabel = title.split(' 转 ')[0];
+  const outputLabel = title.split(' 转 ')[1];
 
   return {
     ...converter,
