@@ -5,6 +5,10 @@ function toCellValue(value: unknown): string {
   return value === undefined || value === null ? '' : String(value);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 export function parseJson(source: string): TableData {
   const parsed = JSON.parse(source) as unknown;
 
@@ -12,18 +16,21 @@ export function parseJson(source: string): TableData {
     return createTableData([], []);
   }
 
-  const firstRow = parsed[0];
-  if (firstRow === null || typeof firstRow !== 'object' || Array.isArray(firstRow)) {
+  const records = parsed.filter(isRecord);
+  if (records.length === 0) {
     return createTableData([], []);
   }
 
-  const columns = Object.keys(firstRow as Record<string, unknown>);
-  const rows = parsed.map((item) => {
-    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
-      return columns.map(() => '');
-    }
+  const columns = records.reduce<string[]>((result, record) => {
+    Object.keys(record).forEach((key) => {
+      if (!result.includes(key)) {
+        result.push(key);
+      }
+    });
+    return result;
+  }, []);
 
-    const record = item as Record<string, unknown>;
+  const rows = records.map((record) => {
     return columns.map((column) => toCellValue(record[column]));
   });
 
