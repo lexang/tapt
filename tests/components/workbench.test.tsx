@@ -36,4 +36,33 @@ describe('ConverterWorkbench', () => {
     expect(screen.getByRole('button', { name: '下载' })).toBeTruthy();
     expect((screen.getByLabelText('转换结果') as HTMLTextAreaElement).value).toBe('Excel 文件已生成，可以下载使用。');
   });
+
+  it('点击下载会创建文件链接', () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:table');
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const click = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      const element = originalCreateElement(tagName);
+      if (tagName === 'a') {
+        Object.defineProperty(element, 'click', { value: click });
+      }
+      return element;
+    });
+
+    render(<ConverterWorkbench initialConverterId="json-to-excel" />);
+    fireEvent.click(screen.getByRole('button', { name: '下载' }));
+
+    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:table');
+  });
 });
