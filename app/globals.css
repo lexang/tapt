@@ -565,6 +565,32 @@ a {
   font-size: 17px;
 }
 
+.output-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.output-meta {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.output-meta span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f8fafc;
+  padding: 5px 9px;
+}
+
 .button {
   min-height: 40px;
   border: 1px solid;
@@ -670,6 +696,10 @@ select.control {
   min-height: 320px;
 }
 
+.output-area-ready {
+  background: #fcfdff;
+}
+
 .dropzone {
   display: grid;
   gap: 5px;
@@ -727,6 +757,10 @@ select.control {
 .inline-message-success {
   color: var(--success);
   font-weight: 800;
+}
+
+.output-feedback {
+  padding-inline: 2px;
 }
 
 .option-stack {

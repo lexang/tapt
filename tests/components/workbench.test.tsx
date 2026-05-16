@@ -3,6 +3,10 @@ import { fireEvent } from '@testing-library/react';
 import { ConverterWorkbench } from '@/components/workbench/converter-workbench';
 
 describe('ConverterWorkbench', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('初始状态不展示示例结果', () => {
     render(<ConverterWorkbench initialConverterId="excel-to-json" />);
 
@@ -136,11 +140,13 @@ describe('ConverterWorkbench', () => {
     const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:table');
     const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     const click = vi.fn();
+    let downloadLink: HTMLAnchorElement | undefined;
     const originalCreateElement = document.createElement.bind(document);
     vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
       const element = originalCreateElement(tagName);
       if (tagName === 'a') {
         Object.defineProperty(element, 'click', { value: click });
+        downloadLink = element;
       }
       return element;
     });
@@ -155,6 +161,46 @@ describe('ConverterWorkbench', () => {
       expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
       expect(click).toHaveBeenCalledTimes(1);
       expect(revokeObjectUrl).toHaveBeenCalledWith('blob:table');
+      expect(downloadLink?.download).toBe('json-to-excel.xlsx');
     });
+  });
+
+  it('非 Excel 结果可以下载为对应文本文件', async () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:text');
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const click = vi.fn();
+    let downloadLink: HTMLAnchorElement | undefined;
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      const element = originalCreateElement(tagName);
+      if (tagName === 'a') {
+        Object.defineProperty(element, 'click', { value: click });
+        downloadLink = element;
+      }
+      return element;
+    });
+
+    render(<ConverterWorkbench initialConverterId="csv-to-json" />);
+    fireEvent.change(screen.getByLabelText('源数据'), {
+      target: { value: 'name,age\nAda,36' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '下载' }));
+
+    await waitFor(() => {
+      expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
+      expect(click).toHaveBeenCalledTimes(1);
+      expect(revokeObjectUrl).toHaveBeenCalledWith('blob:text');
+      expect(downloadLink?.download).toBe('csv-to-json.json');
+    });
+    const downloadedBlob = createObjectUrl.mock.calls[0]?.[0] as Blob;
+    expect(downloadedBlob.type).toBe('application/json;charset=utf-8');
   });
 });

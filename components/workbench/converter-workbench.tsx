@@ -389,7 +389,7 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
           <OutputPanel
             excelSheetName={state.options.excelSheetName}
             notice={state.notice}
-            outputFileName={`${initialConverterId}.${state.outputFormat === 'excel' ? 'xlsx' : 'txt'}`}
+            outputFileName={`${state.inputFormat}-to-${state.outputFormat}`}
             outputFormat={state.outputFormat}
             outputText={state.outputText}
             table={state.table}
