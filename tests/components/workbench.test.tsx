@@ -63,6 +63,41 @@ describe('ConverterWorkbench', () => {
     expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toContain('Ada');
   });
 
+  it('编辑单元格后可以用键盘提交并移动焦点', async () => {
+    render(<ConverterWorkbench initialConverterId="csv-to-json" />);
+
+    fireEvent.change(screen.getByLabelText('源数据'), {
+      target: { value: 'name,age\nAda,36\nLin,30' },
+    });
+
+    const firstName = screen.getByLabelText('name 第 1 行') as HTMLInputElement;
+    const firstAge = screen.getByLabelText('age 第 1 行') as HTMLInputElement;
+    const secondAge = screen.getByLabelText('age 第 2 行') as HTMLInputElement;
+
+    firstName.focus();
+    fireEvent.change(firstName, {
+      target: { value: 'Grace' },
+    });
+    fireEvent.keyDown(firstName, {
+      key: 'Tab',
+      code: 'Tab',
+    });
+
+    await waitFor(() => expect(document.activeElement).toBe(firstAge));
+    expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toContain('Grace');
+
+    fireEvent.change(firstAge, {
+      target: { value: '37' },
+    });
+    fireEvent.keyDown(firstAge, {
+      key: 'Enter',
+      code: 'Enter',
+    });
+
+    await waitFor(() => expect(document.activeElement).toBe(secondAge));
+    expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toContain('"37"');
+  });
+
   it('JSON 输出选项可以切换为对象结构', () => {
     render(<ConverterWorkbench initialConverterId="csv-to-json" />);
 
