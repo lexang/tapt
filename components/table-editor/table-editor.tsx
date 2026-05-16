@@ -33,10 +33,10 @@ export function TableEditor({
           <h3 id="table-editor-title">表格编辑</h3>
         </div>
         <div className="toolbar">
-          <Button disabled={!canEdit} onClick={onAddRow} size="sm">
+          <Button onClick={onAddRow} size="sm">
             加行
           </Button>
-          <Button disabled={!canEdit} onClick={onAddColumn} size="sm">
+          <Button onClick={onAddColumn} size="sm">
             加列
           </Button>
           <Button disabled={!canEdit} onClick={onClearTable} size="sm" variant="ghost">

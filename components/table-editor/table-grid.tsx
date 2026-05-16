@@ -97,12 +97,14 @@ export function TableGrid({
   onDeleteRow,
 }: TableGridProps) {
   const inputRefs = useRef(new Map<string, HTMLInputElement>());
+  const [selectedColumnIndexes, setSelectedColumnIndexes] = useState<number[]>([]);
+  const [selectedRowIndexes, setSelectedRowIndexes] = useState<number[]>([]);
 
   if (table.columns.length === 0) {
     return (
       <div className="empty-table">
         <strong>还没有可预览的表格</strong>
-        <span>粘贴数据、上传文件或使用示例后，可以在这里检查和修改内容。</span>
+        <span>粘贴数据、上传文件、使用示例，或点击上方“加行”“加列”手动创建表格。</span>
       </div>
     );
   }
@@ -209,8 +211,58 @@ export function TableGrid({
     focusCell(getNextPosition(position, key));
   }
 
+  function selectColumn(columnIndex: number) {
+    setSelectedColumnIndexes((currentColumnIndexes) =>
+      currentColumnIndexes.includes(columnIndex)
+        ? currentColumnIndexes.filter((currentColumnIndex) => currentColumnIndex !== columnIndex)
+        : [...currentColumnIndexes, columnIndex],
+    );
+    setSelectedRowIndexes([]);
+  }
+
+  function selectRow(rowIndex: number) {
+    setSelectedRowIndexes((currentRowIndexes) =>
+      currentRowIndexes.includes(rowIndex)
+        ? currentRowIndexes.filter((currentRowIndex) => currentRowIndex !== rowIndex)
+        : [...currentRowIndexes, rowIndex],
+    );
+    setSelectedColumnIndexes([]);
+  }
+
+  function deleteSelected() {
+    if (selectedRowIndexes.length > 0) {
+      [...selectedRowIndexes].sort((left, right) => right - left).forEach((rowIndex) => onDeleteRow(rowIndex));
+      setSelectedRowIndexes([]);
+      return;
+    }
+
+    if (selectedColumnIndexes.length > 0) {
+      [...selectedColumnIndexes]
+        .sort((left, right) => right - left)
+        .forEach((columnIndex) => onDeleteColumn(columnIndex));
+      setSelectedColumnIndexes([]);
+    }
+  }
+
+  function deleteColumn(columnIndex: number) {
+    onDeleteColumn(columnIndex);
+    setSelectedColumnIndexes([]);
+  }
+
   return (
     <div className="table-scroll">
+      {selectedRowIndexes.length > 0 || selectedColumnIndexes.length > 0 ? (
+        <div className="selection-toolbar">
+          <span>
+            {selectedRowIndexes.length > 0
+              ? `已选择 ${selectedRowIndexes.length} 行`
+              : `已选择 ${selectedColumnIndexes.length} 列`}
+          </span>
+          <Button onClick={deleteSelected} size="sm" variant="ghost">
+            删除所选
+          </Button>
+        </div>
+      ) : null}
       <table className="data-grid">
         <thead>
           <tr>
@@ -218,7 +270,11 @@ export function TableGrid({
               #
             </th>
             {table.columns.map((column, columnIndex) => (
-              <th key={`${columnIndex}-${column}`} scope="col">
+              <th
+                className={selectedColumnIndexes.includes(columnIndex) ? 'selected-axis' : undefined}
+                key={`${columnIndex}-${column}`}
+                scope="col"
+              >
                 <div className="column-head">
                   <CommitInput
                     ariaLabel={`第 ${columnIndex + 1} 列名称`}
@@ -229,8 +285,16 @@ export function TableGrid({
                     value={column}
                   />
                   <Button
+                    aria-label={`选择 ${column || `第 ${columnIndex + 1} 列`}`}
+                    onClick={() => selectColumn(columnIndex)}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    选择
+                  </Button>
+                  <Button
                     aria-label={`删除 ${column || `第 ${columnIndex + 1} 列`}`}
-                    onClick={() => onDeleteColumn(columnIndex)}
+                    onClick={() => deleteColumn(columnIndex)}
                     size="sm"
                     variant="ghost"
                   >
@@ -247,11 +311,25 @@ export function TableGrid({
         <tbody>
           {table.rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
-              <th className="row-index" scope="row">
-                {rowIndex + 1}
+              <th className={`row-index ${selectedRowIndexes.includes(rowIndex) ? 'selected-axis' : ''}`} scope="row">
+                <button
+                  aria-label={`选择第 ${rowIndex + 1} 行`}
+                  className="row-select-button"
+                  onClick={() => selectRow(rowIndex)}
+                  type="button"
+                >
+                  {rowIndex + 1}
+                </button>
               </th>
               {table.columns.map((column, columnIndex) => (
-                <td key={`${rowIndex}-${columnIndex}`}>
+                <td
+                  className={
+                    selectedRowIndexes.includes(rowIndex) || selectedColumnIndexes.includes(columnIndex)
+                      ? 'selected-cell'
+                      : undefined
+                  }
+                  key={`${rowIndex}-${columnIndex}`}
+                >
                   <CommitInput
                     ariaLabel={`${column || `第 ${columnIndex + 1} 列`} 第 ${rowIndex + 1} 行`}
                     inputRef={(element) => setInputRef({ rowIndex, columnIndex }, element)}

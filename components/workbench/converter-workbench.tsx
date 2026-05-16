@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useReducer } from 'react';
+import { useMemo, useReducer, useState } from 'react';
 import { resolveConverter } from '@/lib/converters/resolve-converter';
 import type { ConverterFormat } from '@/lib/converters/catalog';
 import type { TableData } from '@/lib/table/types';
@@ -50,6 +50,11 @@ type WorkbenchState = {
   error?: string;
   notice?: string;
   options: GeneratorOptions;
+};
+
+type SourceFileInfo = {
+  name: string;
+  size: string;
 };
 
 type WorkbenchAction =
@@ -114,6 +119,48 @@ function parseSourceText(sourceText: string, inputFormat: ConverterFormat): Tabl
 function getParseErrorMessage(inputFormat: ConverterFormat): string {
   const label = inputFormat.toUpperCase();
   return `请检查 ${label} 数据格式，修正后会自动生成结果。`;
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function getSourceHint(sourceText: string, inputFormat: ConverterFormat, table: TableData) {
+  const trimmed = sourceText.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (inputFormat === 'json' && !/^\s*[\[{]/.test(sourceText)) {
+    return 'JSON 通常以 { 或 [ 开头，请确认粘贴内容是否完整。';
+  }
+
+  if (inputFormat === 'markdown' && !trimmed.includes('|')) {
+    return 'Markdown 表格通常包含 | 分隔符。';
+  }
+
+  if (inputFormat === 'html' && !/<table[\s>]/i.test(sourceText)) {
+    return 'HTML 表格通常包含 <table> 标签。';
+  }
+
+  if (inputFormat === 'sql' && !/(insert\s+into|values\s*\()/i.test(sourceText)) {
+    return 'SQL 输入目前主要识别 INSERT INTO 语句。';
+  }
+
+  if ((inputFormat === 'csv' || inputFormat === 'excel') && table.columns.length <= 1 && table.rows.length > 0) {
+    return '如果数据来自 Excel，可以直接复制多列内容粘贴进来。';
+  }
+
+  return `已识别 ${table.columns.length} 列、${table.rows.length} 行。`;
 }
 
 function hasTableData(table: TableData): boolean {
@@ -303,6 +350,8 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
   const converter = resolveConverter(initialConverterId) ?? resolveConverter('excel-to-json');
   const initialInputFormat = converter?.inputFormat ?? 'excel';
   const initialOutputFormat = converter?.outputFormat ?? 'json';
+  const [isReadingFile, setIsReadingFile] = useState(false);
+  const [fileInfo, setFileInfo] = useState<SourceFileInfo | undefined>(undefined);
   const [state, dispatch] = useReducer(reducer, {
     inputFormat: initialInputFormat,
     outputFormat: initialOutputFormat,
@@ -318,8 +367,15 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
   );
   const canEditTable = hasTableData(state.table);
   const statusLabel = state.error ? '需要检查' : canEditTable ? '已就绪' : '等待数据';
+  const inputHint = state.error ? undefined : getSourceHint(state.sourceText, state.inputFormat, state.table);
 
   async function handleFileSelected(file: File) {
+    setIsReadingFile(true);
+    setFileInfo({
+      name: file.name,
+      size: formatFileSize(file.size),
+    });
+
     try {
       const result = await readFileAsTable(file, state.inputFormat);
       dispatch({ type: 'fileParsed', fileName: file.name, ...result });
@@ -329,6 +385,8 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
         sourceName: file.name,
         message: `无法读取 ${file.name}，请确认文件内容和当前输入格式匹配。`,
       });
+    } finally {
+      setIsReadingFile(false);
     }
   }
 
@@ -354,12 +412,21 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
       <div className="workbench-stack">
         <SourcePanel
           error={state.error}
+          fileInfo={fileInfo}
           inputFormat={state.inputFormat}
+          inputHint={inputHint}
+          isReadingFile={isReadingFile}
           sourceName={state.sourceName}
           sourceText={state.sourceText}
           onFileSelected={handleFileSelected}
-          onSourceTextChange={(value) => dispatch({ type: 'sourceTextChanged', value })}
-          onUseExample={() => dispatch({ type: 'exampleLoaded' })}
+          onSourceTextChange={(value) => {
+            setFileInfo(undefined);
+            dispatch({ type: 'sourceTextChanged', value });
+          }}
+          onUseExample={() => {
+            setFileInfo(undefined);
+            dispatch({ type: 'exampleLoaded' });
+          }}
         />
 
         <EditorPanel

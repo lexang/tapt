@@ -51,6 +51,10 @@ export function updateColumn(table: TableData, columnIndex: number, value: strin
 }
 
 export function addRow(table: TableData): TableData {
+  if (table.columns.length === 0) {
+    return createTableData(['字段1'], [['']]);
+  }
+
   return normalizeTable({
     ...table,
     rows: [...table.rows, createTableRow(table.columns.map(() => ''))],
@@ -65,6 +69,10 @@ export function deleteRow(table: TableData, rowIndex: number): TableData {
 }
 
 export function addColumn(table: TableData): TableData {
+  if (table.columns.length === 0) {
+    return createTableData(['字段1'], [['']]);
+  }
+
   return normalizeTable({
     columns: [...table.columns, `字段${table.columns.length + 1}`],
     rows: table.rows.map((row) => [...row, createTableCell('')]),

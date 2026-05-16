@@ -726,6 +726,12 @@ select.control {
   box-shadow: var(--shadow-soft);
 }
 
+.dropzone-active {
+  border-color: var(--accent);
+  background: #e3f5f1;
+  box-shadow: 0 0 0 4px rgba(15, 159, 143, 0.12);
+}
+
 .dropzone input {
   position: absolute;
   width: 1px;
@@ -743,6 +749,11 @@ select.control {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.dropzone-warning {
+  color: var(--amber) !important;
+  font-weight: 800;
 }
 
 .inline-message {
@@ -809,6 +820,7 @@ select.control {
 }
 
 .table-scroll {
+  position: relative;
   overflow: auto;
   border: 0;
   border-radius: 0;
@@ -818,6 +830,22 @@ select.control {
     inset 0 -1px 0 var(--line);
   max-height: 620px;
   min-height: 390px;
+}
+
+.selection-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(15, 159, 143, 0.22);
+  background: #e8f7f4;
+  color: #04423b;
+  font-size: 13px;
+  font-weight: 850;
+  padding: 8px 12px;
 }
 
 .data-grid {
@@ -877,10 +905,10 @@ select.control {
 
 .column-head {
   display: grid;
-  grid-template-columns: minmax(130px, 1fr) auto;
+  grid-template-columns: minmax(130px, 1fr) auto auto;
   gap: 4px;
   align-items: center;
-  min-width: 210px;
+  min-width: 258px;
   padding: 4px;
 }
 
@@ -899,6 +927,29 @@ select.control {
   background: #f1f5f9;
   text-align: center;
   box-shadow: inset -1px 0 0 var(--grid-line-strong);
+}
+
+.row-select-button {
+  width: 100%;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.row-select-button:hover {
+  color: var(--accent-strong);
+}
+
+.selected-axis {
+  background: #dff4f0 !important;
+  color: var(--accent-strong);
+}
+
+.selected-cell {
+  background: #f1fbf9;
 }
 
 .data-grid thead .row-index {
