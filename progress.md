@@ -11,3 +11,11 @@
 - 已更新测试：非法 JSON、表格编辑、JSON 选项、Excel 下载。
 - 已完成桌面和移动端截图检查，未发现页面元素重叠。
 - 验证通过：`npm test`、`npm run build`、`npx playwright test`。
+
+## 2026-05-16 新分支重做
+
+- 用户要求放弃左中右后台工作台方向，从 `main` 新建 `design/tableconvert-stacked-redesign` 分支。
+- 已把未提交的旧设计分支改动通过 stash 迁移到新分支，未丢弃历史工作。
+- 已按 TableConvert 页面结构改为上中下布局：顶部数据源，中间宽表格编辑器，底部表格生成器。
+- 已完成桌面和移动端截图检查，当前视觉更接近轻工具站而非后台系统。
+- 验证通过：`npm test`、`npm run build`、`npx playwright test`。

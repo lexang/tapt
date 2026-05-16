@@ -317,6 +317,7 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
     [state.inputFormat, state.outputFormat],
   );
   const canEditTable = hasTableData(state.table);
+  const statusLabel = state.error ? '需要检查' : canEditTable ? '已就绪' : '等待数据';
 
   async function handleFileSelected(file: File) {
     try {
@@ -333,19 +334,24 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
 
   return (
     <section className="workbench" aria-labelledby="workbench-title">
-      <header className="workbench-header">
-        <div>
-          <p className="eyebrow">{formatLabel}</p>
-          <h2 id="workbench-title">在线转换工作台</h2>
-          <p>粘贴数据或上传文件，在浏览器中预览、编辑并生成结果。</p>
+      <header className="workbench-topbar">
+        <div className="workbench-brand">
+          <span className="brand-mark">T</span>
+          <div>
+            <p className="eyebrow">{formatLabel}</p>
+            <h2 id="workbench-title">在线转换工作台</h2>
+          </div>
         </div>
-        <div className="workbench-stats" aria-label="表格统计">
+        <div className="workbench-top-actions">
+          <span className={`status-pill ${state.error ? 'status-danger' : canEditTable ? 'status-ready' : ''}`}>
+            {statusLabel}
+          </span>
           <span>{state.table.columns.length} 列</span>
           <span>{state.table.rows.length} 行</span>
         </div>
       </header>
 
-      <div className="workbench-grid">
+      <div className="workbench-stack">
         <SourcePanel
           error={state.error}
           inputFormat={state.inputFormat}
@@ -355,32 +361,41 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
           onSourceTextChange={(value) => dispatch({ type: 'sourceTextChanged', value })}
           onUseExample={() => dispatch({ type: 'exampleLoaded' })}
         />
-        <OptionsPanel
-          options={state.options}
-          outputFormat={state.outputFormat}
-          onOptionsChange={(value) => dispatch({ type: 'optionsChanged', value })}
-        />
-        <OutputPanel
-          excelSheetName={state.options.excelSheetName}
-          notice={state.notice}
-          outputFileName={`${initialConverterId}.${state.outputFormat === 'excel' ? 'xlsx' : 'txt'}`}
-          outputFormat={state.outputFormat}
-          outputText={state.outputText}
-          table={state.table}
-        />
-      </div>
 
-      <EditorPanel
-        canEdit={canEditTable}
-        table={state.table}
-        onAddColumn={() => dispatch({ type: 'columnAdded' })}
-        onAddRow={() => dispatch({ type: 'rowAdded' })}
-        onCellChange={(rowIndex, columnIndex, value) => dispatch({ type: 'cellChanged', rowIndex, columnIndex, value })}
-        onClearTable={() => dispatch({ type: 'tableCleared' })}
-        onColumnChange={(columnIndex, value) => dispatch({ type: 'columnChanged', columnIndex, value })}
-        onDeleteColumn={(columnIndex) => dispatch({ type: 'columnDeleted', columnIndex })}
-        onDeleteRow={(rowIndex) => dispatch({ type: 'rowDeleted', rowIndex })}
-      />
+        <EditorPanel
+          canEdit={canEditTable}
+          table={state.table}
+          onAddColumn={() => dispatch({ type: 'columnAdded' })}
+          onAddRow={() => dispatch({ type: 'rowAdded' })}
+          onCellChange={(rowIndex, columnIndex, value) => dispatch({ type: 'cellChanged', rowIndex, columnIndex, value })}
+          onClearTable={() => dispatch({ type: 'tableCleared' })}
+          onColumnChange={(columnIndex, value) => dispatch({ type: 'columnChanged', columnIndex, value })}
+          onDeleteColumn={(columnIndex) => dispatch({ type: 'columnDeleted', columnIndex })}
+          onDeleteRow={(rowIndex) => dispatch({ type: 'rowDeleted', rowIndex })}
+        />
+
+        <section className="generator-panel" aria-labelledby="generator-title">
+          <div className="generator-heading">
+            <div>
+              <p className="panel-kicker">Generator</p>
+              <h3 id="generator-title">表格生成器</h3>
+            </div>
+          </div>
+          <OptionsPanel
+            options={state.options}
+            outputFormat={state.outputFormat}
+            onOptionsChange={(value) => dispatch({ type: 'optionsChanged', value })}
+          />
+          <OutputPanel
+            excelSheetName={state.options.excelSheetName}
+            notice={state.notice}
+            outputFileName={`${initialConverterId}.${state.outputFormat === 'excel' ? 'xlsx' : 'txt'}`}
+            outputFormat={state.outputFormat}
+            outputText={state.outputText}
+            table={state.table}
+          />
+        </section>
+      </div>
     </section>
   );
 }
