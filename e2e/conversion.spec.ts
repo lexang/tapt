@@ -26,6 +26,7 @@ test('编辑预览表格后输出会更新', async ({ page }) => {
   await page.goto('/zh/csv-to-json');
   await page.getByLabel('源数据').fill('name,age\nAda,36');
   await page.getByLabel('name 第 1 行').fill('Lin');
+  await page.getByLabel('name 第 1 行').press('Enter');
 
   await expect(page.getByRole('textbox', { name: '转换结果' })).toContainText('"Lin"');
 });

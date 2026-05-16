@@ -42,14 +42,22 @@ describe('ConverterWorkbench', () => {
     expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toBe('');
   });
 
-  it('编辑单元格后立即更新输出', () => {
+  it('编辑单元格时按回车后更新输出', () => {
     render(<ConverterWorkbench initialConverterId="csv-to-json" />);
 
     fireEvent.change(screen.getByLabelText('源数据'), {
       target: { value: 'name,age\nLin,30' },
     });
-    fireEvent.change(screen.getByLabelText('name 第 1 行'), {
+    const cellInput = screen.getByLabelText('name 第 1 行');
+    fireEvent.change(cellInput, {
       target: { value: 'Ada' },
+    });
+
+    expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).not.toContain('Ada');
+
+    fireEvent.keyDown(cellInput, {
+      key: 'Enter',
+      code: 'Enter',
     });
 
     expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toContain('Ada');

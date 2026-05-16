@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { TableData } from '@/lib/table/types';
 import { Button } from '@/components/ui/button';
 
@@ -8,6 +9,44 @@ type TableGridProps = {
   onDeleteColumn: (columnIndex: number) => void;
   onDeleteRow: (rowIndex: number) => void;
 };
+
+type CommitInputProps = {
+  ariaLabel: string;
+  name: string;
+  value: string;
+  onCommit: (value: string) => void;
+};
+
+function CommitInput({ ariaLabel, name, onCommit, value }: CommitInputProps) {
+  const [draftValue, setDraftValue] = useState(value);
+
+  useEffect(() => {
+    setDraftValue(value);
+  }, [value]);
+
+  return (
+    <input
+      aria-label={ariaLabel}
+      autoComplete="off"
+      name={name}
+      onChange={(event) => setDraftValue(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          onCommit(draftValue);
+          event.currentTarget.blur();
+        }
+
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setDraftValue(value);
+          event.currentTarget.blur();
+        }
+      }}
+      value={draftValue}
+    />
+  );
+}
 
 export function TableGrid({
   table,
@@ -36,11 +75,10 @@ export function TableGrid({
             {table.columns.map((column, columnIndex) => (
               <th key={`${columnIndex}-${column}`} scope="col">
                 <div className="column-head">
-                  <input
-                    aria-label={`第 ${columnIndex + 1} 列名称`}
-                    autoComplete="off"
+                  <CommitInput
+                    ariaLabel={`第 ${columnIndex + 1} 列名称`}
                     name={`column-${columnIndex}`}
-                    onChange={(event) => onColumnChange(columnIndex, event.target.value)}
+                    onCommit={(value) => onColumnChange(columnIndex, value)}
                     value={column}
                   />
                   <Button
@@ -67,11 +105,10 @@ export function TableGrid({
               </th>
               {table.columns.map((column, columnIndex) => (
                 <td key={`${rowIndex}-${columnIndex}`}>
-                  <input
-                    aria-label={`${column || `第 ${columnIndex + 1} 列`} 第 ${rowIndex + 1} 行`}
-                    autoComplete="off"
+                  <CommitInput
+                    ariaLabel={`${column || `第 ${columnIndex + 1} 列`} 第 ${rowIndex + 1} 行`}
                     name={`cell-${rowIndex}-${columnIndex}`}
-                    onChange={(event) => onCellChange(rowIndex, columnIndex, event.target.value)}
+                    onCommit={(value) => onCellChange(rowIndex, columnIndex, value)}
                     value={row[columnIndex]?.value ?? ''}
                   />
                 </td>
