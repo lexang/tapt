@@ -44,6 +44,7 @@ type WorkbenchState = {
   outputFormat: ConverterFormat;
   sourceText: string;
   sourceName?: string;
+  parsedAsFormat?: ConverterFormat;
   table: TableData;
   outputText: string;
   outputBinary?: Uint8Array;
@@ -59,6 +60,7 @@ type SourceFileInfo = {
 
 type WorkbenchAction =
   | { type: 'sourceTextChanged'; value: string }
+  | { type: 'sourceTextParsedAs'; inputFormat: ConverterFormat }
   | { type: 'fileParsed'; table: TableData; fileName: string; sourceText?: string }
   | { type: 'parseFailed'; message: string; sourceName?: string }
   | { type: 'cellChanged'; rowIndex: number; columnIndex: number; value: string }
@@ -90,6 +92,15 @@ const exampleSources: Record<ConverterFormat, string> = {
   html: '<table><thead><tr><th>name</th><th>age</th><th>role</th></tr></thead><tbody><tr><td>Ada</td><td>36</td><td>Engineer</td></tr><tr><td>Lin</td><td>30</td><td>Designer</td></tr></tbody></table>',
   sql: "INSERT INTO `data_table` (`name`, `age`, `role`) VALUES ('Ada', '36', 'Engineer');\nINSERT INTO `data_table` (`name`, `age`, `role`) VALUES ('Lin', '30', 'Designer');",
   excel: 'name,age,role\nAda,36,Engineer\nLin,30,Designer',
+};
+
+const formatLabels: Record<ConverterFormat, string> = {
+  csv: 'CSV',
+  excel: 'Excel',
+  html: 'HTML',
+  json: 'JSON',
+  markdown: 'Markdown',
+  sql: 'SQL',
 };
 
 function parseSourceText(sourceText: string, inputFormat: ConverterFormat): TableData {
@@ -161,6 +172,46 @@ function getSourceHint(sourceText: string, inputFormat: ConverterFormat, table: 
   }
 
   return `已识别 ${table.columns.length} 列、${table.rows.length} 行。`;
+}
+
+function detectSourceFormat(sourceText: string): ConverterFormat | undefined {
+  const trimmed = sourceText.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (/^[[{]/.test(trimmed)) {
+    try {
+      JSON.parse(trimmed);
+      return 'json';
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (/<table[\s>]/i.test(trimmed)) {
+    return 'html';
+  }
+
+  if (/\binsert\s+into\b/i.test(trimmed) && /\bvalues\s*\(/i.test(trimmed)) {
+    return 'sql';
+  }
+
+  const lines = trimmed.split(/\r?\n/).filter(Boolean);
+  if (lines.length >= 2 && lines[0].includes('|') && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[1])) {
+    return 'markdown';
+  }
+
+  if (lines.length >= 2 && lines[0].includes('\t')) {
+    return 'csv';
+  }
+
+  if (lines.length >= 2 && lines[0].includes(',') && lines.some((line) => line.includes(','))) {
+    return 'csv';
+  }
+
+  return undefined;
 }
 
 function hasTableData(table: TableData): boolean {
@@ -236,6 +287,7 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
       return withGeneratedOutput(state, table, {
         sourceText: action.value,
         sourceName: undefined,
+        parsedAsFormat: undefined,
         error: undefined,
         notice: action.value.trim() ? '已根据输入内容更新结果。' : undefined,
       });
@@ -243,6 +295,7 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
       return {
         ...state,
         sourceText: action.value,
+        parsedAsFormat: undefined,
         table: emptyTable,
         outputText: '',
         outputBinary: undefined,
@@ -252,10 +305,31 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
     }
   }
 
+  if (action.type === 'sourceTextParsedAs') {
+    try {
+      const table = parseSourceText(state.sourceText, action.inputFormat);
+      return withGeneratedOutput(state, table, {
+        error: undefined,
+        parsedAsFormat: action.inputFormat,
+        notice: `已按 ${formatLabels[action.inputFormat]} 解析。`,
+      });
+    } catch {
+      return {
+        ...state,
+        table: emptyTable,
+        outputText: '',
+        outputBinary: undefined,
+        error: getParseErrorMessage(action.inputFormat),
+        notice: undefined,
+      };
+    }
+  }
+
   if (action.type === 'fileParsed') {
     return withGeneratedOutput(state, action.table, {
       sourceText: action.sourceText ?? '',
       sourceName: action.fileName,
+      parsedAsFormat: undefined,
       error: undefined,
       notice: `已读取 ${action.fileName}。`,
     });
@@ -265,6 +339,7 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
     return {
       ...state,
       sourceName: action.sourceName,
+      parsedAsFormat: undefined,
       error: action.message,
       notice: undefined,
       outputText: '',
@@ -304,6 +379,7 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
     return withGeneratedOutput(state, clearTable(), {
       sourceText: '',
       sourceName: undefined,
+      parsedAsFormat: undefined,
       error: undefined,
       notice: '已清空表格。',
     });
@@ -316,6 +392,7 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
       return withGeneratedOutput(state, table, {
         sourceText,
         sourceName: undefined,
+        parsedAsFormat: undefined,
         error: undefined,
         notice: '已载入示例数据。',
       });
@@ -368,6 +445,16 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
   const canEditTable = hasTableData(state.table);
   const statusLabel = state.error ? '需要检查' : canEditTable ? '已就绪' : '等待数据';
   const inputHint = state.error ? undefined : getSourceHint(state.sourceText, state.inputFormat, state.table);
+  const detectedInputFormat = detectSourceFormat(state.sourceText);
+  const detectedFormat =
+    detectedInputFormat &&
+    detectedInputFormat !== state.inputFormat &&
+    detectedInputFormat !== state.parsedAsFormat
+      ? {
+          format: detectedInputFormat,
+          label: formatLabels[detectedInputFormat],
+        }
+      : undefined;
 
   async function handleFileSelected(file: File) {
     setIsReadingFile(true);
@@ -411,6 +498,7 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
 
       <div className="workbench-stack">
         <SourcePanel
+          detectedFormat={detectedFormat}
           error={state.error}
           fileInfo={fileInfo}
           inputFormat={state.inputFormat}
@@ -419,6 +507,9 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
           sourceName={state.sourceName}
           sourceText={state.sourceText}
           onFileSelected={handleFileSelected}
+          onParseAsDetectedFormat={
+            detectedFormat ? () => dispatch({ type: 'sourceTextParsedAs', inputFormat: detectedFormat.format }) : undefined
+          }
           onSourceTextChange={(value) => {
             setFileInfo(undefined);
             dispatch({ type: 'sourceTextChanged', value });

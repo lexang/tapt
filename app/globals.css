@@ -760,6 +760,25 @@ select.control {
   margin: 0;
 }
 
+.source-feedback {
+  display: grid;
+  gap: 8px;
+}
+
+.format-suggestion {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 8px;
+  background: #eef5ff;
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
 .inline-message-error {
   color: var(--danger);
   font-weight: 800;

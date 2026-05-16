@@ -8,7 +8,13 @@ type SourceFileInfo = {
   size: string;
 };
 
+type DetectedSourceFormat = {
+  format: ConverterFormat;
+  label: string;
+};
+
 type SourcePanelProps = {
+  detectedFormat?: DetectedSourceFormat;
   error?: string;
   fileInfo?: SourceFileInfo;
   inputFormat: ConverterFormat;
@@ -17,6 +23,7 @@ type SourcePanelProps = {
   sourceName?: string;
   sourceText: string;
   onFileSelected: (file: File) => void;
+  onParseAsDetectedFormat?: () => void;
   onSourceTextChange: (value: string) => void;
   onUseExample: () => void;
 };
@@ -52,6 +59,7 @@ function getFileExtension(fileName: string) {
 }
 
 export function SourcePanel({
+  detectedFormat,
   error,
   fileInfo,
   inputFormat,
@@ -60,6 +68,7 @@ export function SourcePanel({
   sourceName,
   sourceText,
   onFileSelected,
+  onParseAsDetectedFormat,
   onSourceTextChange,
   onUseExample,
 }: SourcePanelProps) {
@@ -136,15 +145,28 @@ export function SourcePanel({
         />
       </label>
 
-      {error ? (
-        <p className="inline-message inline-message-error" role="alert">
-          {error}
-        </p>
-      ) : inputHint ? (
-        <p className="inline-message inline-message-success">{inputHint}</p>
-      ) : (
-        <p className="inline-message">数据只在你的浏览器中处理。</p>
-      )}
+      <div className="source-feedback">
+        {detectedFormat ? (
+          <div className="format-suggestion">
+            <span>这段内容更像 {detectedFormat.label}。</span>
+            {onParseAsDetectedFormat ? (
+              <Button onClick={onParseAsDetectedFormat} size="sm" variant="ghost">
+                按 {detectedFormat.label} 解析
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {error ? (
+          <p className="inline-message inline-message-error" role="alert">
+            {error}
+          </p>
+        ) : inputHint ? (
+          <p className="inline-message inline-message-success">{inputHint}</p>
+        ) : (
+          <p className="inline-message">数据只在你的浏览器中处理。</p>
+        )}
+      </div>
     </section>
   );
 }
