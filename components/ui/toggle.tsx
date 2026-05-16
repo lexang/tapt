@@ -6,7 +6,7 @@ type ToggleProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
 
 export function Toggle({ label, ...props }: ToggleProps) {
   return (
-    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#344054' }}>
+    <label className="toggle">
       <input type="checkbox" {...props} />
       <span>{label}</span>
     </label>

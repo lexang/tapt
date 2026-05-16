@@ -2,6 +2,7 @@ import type { TableData } from '@/lib/table/types';
 
 export type SqlGeneratorOptions = {
   tableName?: string;
+  includeCreateTable?: boolean;
 };
 
 function quoteIdentifier(identifier: string): string {
@@ -15,11 +16,20 @@ function quoteValue(value: string): string {
 export function generateSql(table: TableData, options: SqlGeneratorOptions = {}): string {
   const tableName = options.tableName ?? 'data_table';
   const columns = table.columns.map(quoteIdentifier).join(', ');
+  const createTable = `CREATE TABLE ${quoteIdentifier(tableName)} (${table.columns
+    .map((column) => `${quoteIdentifier(column)} TEXT`)
+    .join(', ')});`;
 
-  return table.rows
+  const inserts = table.rows
     .map((row) => {
       const values = table.columns.map((_, index) => quoteValue(row[index]?.value ?? '')).join(', ');
       return `INSERT INTO ${quoteIdentifier(tableName)} (${columns}) VALUES (${values});`;
     })
     .join('\n');
+
+  if (!options.includeCreateTable) {
+    return inserts;
+  }
+
+  return [createTable, inserts].filter(Boolean).join('\n');
 }

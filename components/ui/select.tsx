@@ -5,22 +5,11 @@ type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   options: Array<{ label: string; value: string }>;
 };
 
-export function Select({ label, options, style, ...props }: SelectProps) {
+export function Select({ label, options, className, ...props }: SelectProps) {
   return (
-    <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#344054' }}>
+    <label className={['field', className].filter(Boolean).join(' ')}>
       <span>{label}</span>
-      <select
-        style={{
-          minHeight: 36,
-          border: '1px solid #c8d0dc',
-          borderRadius: 6,
-          padding: '0 10px',
-          fontSize: 14,
-          background: '#ffffff',
-          ...style,
-        }}
-        {...props}
-      >
+      <select className="control" {...props}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

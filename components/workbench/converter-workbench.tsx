@@ -4,7 +4,16 @@ import { useMemo, useReducer } from 'react';
 import { resolveConverter } from '@/lib/converters/resolve-converter';
 import type { ConverterFormat } from '@/lib/converters/catalog';
 import type { TableData } from '@/lib/table/types';
-import { createTableData } from '@/lib/table/ops';
+import {
+  addColumn,
+  addRow,
+  clearTable,
+  createTableData,
+  deleteColumn,
+  deleteRow,
+  updateCell,
+  updateColumn,
+} from '@/lib/table/ops';
 import { parseCsv } from '@/lib/parsers/parse-csv';
 import { parseJson } from '@/lib/parsers/parse-json';
 import { parseMarkdown } from '@/lib/parsers/parse-markdown';
@@ -15,33 +24,72 @@ import { generateCsv } from '@/lib/generators/generate-csv';
 import { generateMarkdown } from '@/lib/generators/generate-markdown';
 import { generateHtml } from '@/lib/generators/generate-html';
 import { generateSql } from '@/lib/generators/generate-sql';
-import { generateExcel } from '@/lib/generators/generate-excel';
 import { SourcePanel } from '@/components/workbench/source-panel';
 import { EditorPanel } from '@/components/workbench/editor-panel';
 import { OutputPanel } from '@/components/workbench/output-panel';
+import { OptionsPanel } from '@/components/workbench/options-panel';
+
+type GeneratorOptions = {
+  prettyJson: boolean;
+  jsonShape: 'array' | 'object';
+  csvDelimiter: ',' | ';' | '\t';
+  includeCsvHeader: boolean;
+  sqlTableName: string;
+  includeCreateTable: boolean;
+  excelSheetName: string;
+};
 
 type WorkbenchState = {
   inputFormat: ConverterFormat;
   outputFormat: ConverterFormat;
   sourceText: string;
+  sourceName?: string;
   table: TableData;
   outputText: string;
   outputBinary?: Uint8Array;
-  prettyJson: boolean;
+  error?: string;
+  notice?: string;
+  options: GeneratorOptions;
 };
 
 type WorkbenchAction =
   | { type: 'sourceTextChanged'; value: string }
+  | { type: 'fileParsed'; table: TableData; fileName: string; sourceText?: string }
+  | { type: 'parseFailed'; message: string; sourceName?: string }
   | { type: 'cellChanged'; rowIndex: number; columnIndex: number; value: string }
+  | { type: 'columnChanged'; columnIndex: number; value: string }
+  | { type: 'rowAdded' }
+  | { type: 'rowDeleted'; rowIndex: number }
+  | { type: 'columnAdded' }
+  | { type: 'columnDeleted'; columnIndex: number }
+  | { type: 'tableCleared' }
   | { type: 'exampleLoaded' }
-  | { type: 'prettyJsonChanged'; value: boolean };
+  | { type: 'optionsChanged'; value: Partial<GeneratorOptions> };
 
-const exampleSource = 'name,age\nAda,36';
-const exampleTable = createTableData(['name', 'age'], [['Ada', '36']]);
+const emptyTable = createTableData([], []);
+
+const defaultOptions: GeneratorOptions = {
+  prettyJson: true,
+  jsonShape: 'array',
+  csvDelimiter: ',',
+  includeCsvHeader: true,
+  sqlTableName: 'data_table',
+  includeCreateTable: false,
+  excelSheetName: 'Sheet1',
+};
+
+const exampleSources: Record<ConverterFormat, string> = {
+  csv: 'name,age,role\nAda,36,Engineer\nLin,30,Designer',
+  json: '[{"name":"Ada","age":"36","role":"Engineer"},{"name":"Lin","age":"30","role":"Designer"}]',
+  markdown: '| name | age | role |\n| --- | --- | --- |\n| Ada | 36 | Engineer |\n| Lin | 30 | Designer |',
+  html: '<table><thead><tr><th>name</th><th>age</th><th>role</th></tr></thead><tbody><tr><td>Ada</td><td>36</td><td>Engineer</td></tr><tr><td>Lin</td><td>30</td><td>Designer</td></tr></tbody></table>',
+  sql: "INSERT INTO `data_table` (`name`, `age`, `role`) VALUES ('Ada', '36', 'Engineer');\nINSERT INTO `data_table` (`name`, `age`, `role`) VALUES ('Lin', '30', 'Designer');",
+  excel: 'name,age,role\nAda,36,Engineer\nLin,30,Designer',
+};
 
 function parseSourceText(sourceText: string, inputFormat: ConverterFormat): TableData {
   if (sourceText.trim().length === 0) {
-    return createTableData([], []);
+    return emptyTable;
   }
 
   if (inputFormat === 'json') {
@@ -63,91 +111,188 @@ function parseSourceText(sourceText: string, inputFormat: ConverterFormat): Tabl
   return parseCsv(sourceText);
 }
 
+function getParseErrorMessage(inputFormat: ConverterFormat): string {
+  const label = inputFormat.toUpperCase();
+  return `请检查 ${label} 数据格式，修正后会自动生成结果。`;
+}
+
+function hasTableData(table: TableData): boolean {
+  return table.columns.length > 0 || table.rows.length > 0;
+}
+
 function generateOutput(
   table: TableData,
   outputFormat: ConverterFormat,
-  prettyJson: boolean,
+  options: GeneratorOptions,
 ): Pick<WorkbenchState, 'outputText' | 'outputBinary'> {
+  if (!hasTableData(table)) {
+    return { outputText: '', outputBinary: undefined };
+  }
+
   if (outputFormat === 'json') {
-    return { outputText: generateJson(table, { pretty: prettyJson }) };
+    return {
+      outputText: generateJson(table, {
+        pretty: options.prettyJson,
+        shape: options.jsonShape,
+      }),
+      outputBinary: undefined,
+    };
   }
 
   if (outputFormat === 'csv') {
-    return { outputText: generateCsv(table) };
+    return {
+      outputText: generateCsv(table, {
+        delimiter: options.csvDelimiter,
+        includeHeader: options.includeCsvHeader,
+      }),
+      outputBinary: undefined,
+    };
   }
 
   if (outputFormat === 'markdown') {
-    return { outputText: generateMarkdown(table) };
+    return { outputText: generateMarkdown(table), outputBinary: undefined };
   }
 
   if (outputFormat === 'html') {
-    return { outputText: generateHtml(table) };
+    return { outputText: generateHtml(table), outputBinary: undefined };
   }
 
   if (outputFormat === 'sql') {
-    return { outputText: generateSql(table) };
+    return {
+      outputText: generateSql(table, {
+        tableName: options.sqlTableName,
+        includeCreateTable: options.includeCreateTable,
+      }),
+      outputBinary: undefined,
+    };
   }
 
   return {
     outputText: 'Excel 文件已生成，可以下载使用。',
-    outputBinary: generateExcel(table),
+    outputBinary: undefined,
+  };
+}
+
+function withGeneratedOutput(state: WorkbenchState, table: TableData, nextState: Partial<WorkbenchState> = {}): WorkbenchState {
+  return {
+    ...state,
+    ...nextState,
+    table,
+    ...generateOutput(table, nextState.outputFormat ?? state.outputFormat, nextState.options ?? state.options),
   };
 }
 
 function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState {
   if (action.type === 'sourceTextChanged') {
-    const table = parseSourceText(action.value, state.inputFormat);
+    try {
+      const table = parseSourceText(action.value, state.inputFormat);
+      return withGeneratedOutput(state, table, {
+        sourceText: action.value,
+        sourceName: undefined,
+        error: undefined,
+        notice: action.value.trim() ? '已根据输入内容更新结果。' : undefined,
+      });
+    } catch {
+      return {
+        ...state,
+        sourceText: action.value,
+        table: emptyTable,
+        outputText: '',
+        outputBinary: undefined,
+        error: getParseErrorMessage(state.inputFormat),
+        notice: undefined,
+      };
+    }
+  }
+
+  if (action.type === 'fileParsed') {
+    return withGeneratedOutput(state, action.table, {
+      sourceText: action.sourceText ?? '',
+      sourceName: action.fileName,
+      error: undefined,
+      notice: `已读取 ${action.fileName}。`,
+    });
+  }
+
+  if (action.type === 'parseFailed') {
     return {
       ...state,
-      sourceText: action.value,
-      table,
-      ...generateOutput(table, state.outputFormat, state.prettyJson),
+      sourceName: action.sourceName,
+      error: action.message,
+      notice: undefined,
+      outputText: '',
+      outputBinary: undefined,
     };
   }
 
   if (action.type === 'cellChanged') {
-    const rows = state.table.rows.map((row, rowIndex) => {
-      if (rowIndex !== action.rowIndex) {
-        return row;
-      }
-
-      return row.map((cell, columnIndex) => {
-        if (columnIndex !== action.columnIndex) {
-          return cell;
-        }
-
-        return { value: action.value };
-      });
+    return withGeneratedOutput(state, updateCell(state.table, action.rowIndex, action.columnIndex, action.value), {
+      notice: '已更新转换结果。',
     });
+  }
 
-    return {
-      ...state,
-      table: {
-        ...state.table,
-        rows,
-      },
-      ...generateOutput({ ...state.table, rows }, state.outputFormat, state.prettyJson),
-    };
+  if (action.type === 'columnChanged') {
+    return withGeneratedOutput(state, updateColumn(state.table, action.columnIndex, action.value), {
+      notice: '已更新字段名称。',
+    });
+  }
+
+  if (action.type === 'rowAdded') {
+    return withGeneratedOutput(state, addRow(state.table), { notice: '已添加一行。' });
+  }
+
+  if (action.type === 'rowDeleted') {
+    return withGeneratedOutput(state, deleteRow(state.table, action.rowIndex), { notice: '已删除该行。' });
+  }
+
+  if (action.type === 'columnAdded') {
+    return withGeneratedOutput(state, addColumn(state.table), { notice: '已添加一列。' });
+  }
+
+  if (action.type === 'columnDeleted') {
+    return withGeneratedOutput(state, deleteColumn(state.table, action.columnIndex), { notice: '已删除该列。' });
+  }
+
+  if (action.type === 'tableCleared') {
+    return withGeneratedOutput(state, clearTable(), {
+      sourceText: '',
+      sourceName: undefined,
+      error: undefined,
+      notice: '已清空表格。',
+    });
   }
 
   if (action.type === 'exampleLoaded') {
-    return {
-      ...state,
-      sourceText: exampleSource,
-      table: exampleTable,
-      ...generateOutput(exampleTable, state.outputFormat, state.prettyJson),
-    };
+    try {
+      const sourceText = exampleSources[state.inputFormat];
+      const table = parseSourceText(sourceText, state.inputFormat === 'excel' ? 'csv' : state.inputFormat);
+      return withGeneratedOutput(state, table, {
+        sourceText,
+        sourceName: undefined,
+        error: undefined,
+        notice: '已载入示例数据。',
+      });
+    } catch {
+      return state;
+    }
   }
 
-  if (action.type === 'prettyJsonChanged') {
-    return {
-      ...state,
-      prettyJson: action.value,
-      ...generateOutput(state.table, state.outputFormat, action.value),
-    };
+  if (action.type === 'optionsChanged') {
+    const options = { ...state.options, ...action.value };
+    return withGeneratedOutput(state, state.table, { options, notice: '已按新选项生成结果。' });
   }
 
   return state;
+}
+
+async function readFileAsTable(file: File, inputFormat: ConverterFormat): Promise<{ table: TableData; sourceText?: string }> {
+  if (inputFormat === 'excel' || /\.(xlsx|xls)$/i.test(file.name)) {
+    const { parseExcel } = await import('@/lib/parsers/parse-excel');
+    return { table: parseExcel(await file.arrayBuffer()) };
+  }
+
+  const sourceText = await file.text();
+  return { table: parseSourceText(sourceText, inputFormat), sourceText };
 }
 
 type ConverterWorkbenchProps = {
@@ -156,47 +301,86 @@ type ConverterWorkbenchProps = {
 
 export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: ConverterWorkbenchProps) {
   const converter = resolveConverter(initialConverterId) ?? resolveConverter('excel-to-json');
+  const initialInputFormat = converter?.inputFormat ?? 'excel';
+  const initialOutputFormat = converter?.outputFormat ?? 'json';
   const [state, dispatch] = useReducer(reducer, {
-    inputFormat: converter?.inputFormat ?? 'excel',
-    outputFormat: converter?.outputFormat ?? 'json',
+    inputFormat: initialInputFormat,
+    outputFormat: initialOutputFormat,
     sourceText: '',
-    table: exampleTable,
-    ...generateOutput(exampleTable, converter?.outputFormat ?? 'json', true),
-    prettyJson: true,
+    table: emptyTable,
+    outputText: '',
+    outputBinary: undefined,
+    options: defaultOptions,
   });
   const formatLabel = useMemo(
     () => `${state.inputFormat.toUpperCase()} 转 ${state.outputFormat.toUpperCase()}`,
     [state.inputFormat, state.outputFormat],
   );
+  const canEditTable = hasTableData(state.table);
+
+  async function handleFileSelected(file: File) {
+    try {
+      const result = await readFileAsTable(file, state.inputFormat);
+      dispatch({ type: 'fileParsed', fileName: file.name, ...result });
+    } catch {
+      dispatch({
+        type: 'parseFailed',
+        sourceName: file.name,
+        message: `无法读取 ${file.name}，请确认文件内容和当前输入格式匹配。`,
+      });
+    }
+  }
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
-      <header style={{ display: 'grid', gap: 6 }}>
-        <p style={{ margin: 0, color: '#174ea6', fontSize: 14, fontWeight: 700 }}>
-          {formatLabel}
-        </p>
-        <h1 style={{ margin: 0, fontSize: 32, letterSpacing: 0 }}>表格转换工具</h1>
-        <p style={{ margin: 0, color: '#667085' }}>数据在本地浏览器处理，转换结果可以直接复制。</p>
+    <section className="workbench" aria-labelledby="workbench-title">
+      <header className="workbench-header">
+        <div>
+          <p className="eyebrow">{formatLabel}</p>
+          <h2 id="workbench-title">在线转换工作台</h2>
+          <p>粘贴数据或上传文件，在浏览器中预览、编辑并生成结果。</p>
+        </div>
+        <div className="workbench-stats" aria-label="表格统计">
+          <span>{state.table.columns.length} 列</span>
+          <span>{state.table.rows.length} 行</span>
+        </div>
       </header>
-      <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(0, 1fr)' }}>
+
+      <div className="workbench-grid">
         <SourcePanel
+          error={state.error}
+          inputFormat={state.inputFormat}
+          sourceName={state.sourceName}
           sourceText={state.sourceText}
+          onFileSelected={handleFileSelected}
           onSourceTextChange={(value) => dispatch({ type: 'sourceTextChanged', value })}
           onUseExample={() => dispatch({ type: 'exampleLoaded' })}
         />
-        <EditorPanel
-          table={state.table}
-          onCellChange={(rowIndex, columnIndex, value) => dispatch({ type: 'cellChanged', rowIndex, columnIndex, value })}
+        <OptionsPanel
+          options={state.options}
+          outputFormat={state.outputFormat}
+          onOptionsChange={(value) => dispatch({ type: 'optionsChanged', value })}
         />
         <OutputPanel
+          excelSheetName={state.options.excelSheetName}
+          notice={state.notice}
+          outputFileName={`${initialConverterId}.${state.outputFormat === 'excel' ? 'xlsx' : 'txt'}`}
+          outputFormat={state.outputFormat}
           outputText={state.outputText}
-          outputBinary={state.outputBinary}
-          outputFileName={`${initialConverterId}.xlsx`}
-          prettyJson={state.prettyJson}
-          showPrettyJson={state.outputFormat === 'json'}
-          onPrettyJsonChange={(value) => dispatch({ type: 'prettyJsonChanged', value })}
+          table={state.table}
         />
       </div>
-    </div>
+
+      <EditorPanel
+        canEdit={canEditTable}
+        table={state.table}
+        onAddColumn={() => dispatch({ type: 'columnAdded' })}
+        onAddRow={() => dispatch({ type: 'rowAdded' })}
+        onCellChange={(rowIndex, columnIndex, value) => dispatch({ type: 'cellChanged', rowIndex, columnIndex, value })}
+        onClearTable={() => dispatch({ type: 'tableCleared' })}
+        onColumnChange={(columnIndex, value) => dispatch({ type: 'columnChanged', columnIndex, value })}
+        onDeleteColumn={(columnIndex) => dispatch({ type: 'columnDeleted', columnIndex })}
+        onDeleteRow={(rowIndex) => dispatch({ type: 'rowDeleted', rowIndex })}
+      />
+    </section>
   );
 }

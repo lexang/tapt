@@ -1,28 +1,40 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Toggle } from '@/components/ui/toggle';
+import type { ConverterFormat } from '@/lib/converters/catalog';
+import type { TableData } from '@/lib/table/types';
 
 type OutputPanelProps = {
+  excelSheetName: string;
+  notice?: string;
   outputText: string;
-  outputBinary?: Uint8Array;
   outputFileName?: string;
-  prettyJson: boolean;
-  showPrettyJson: boolean;
-  onPrettyJsonChange: (value: boolean) => void;
+  outputFormat: ConverterFormat;
+  table: TableData;
 };
 
+function getEmptyMessage(outputFormat: ConverterFormat): string {
+  return `粘贴或上传数据后，这里会显示 ${outputFormat.toUpperCase()} 结果…`;
+}
+
 export function OutputPanel({
+  excelSheetName,
+  notice,
   outputText,
-  outputBinary,
   outputFileName = 'table.xlsx',
-  prettyJson,
-  showPrettyJson,
-  onPrettyJsonChange,
+  outputFormat,
+  table,
 }: OutputPanelProps) {
-  function downloadOutput() {
-    if (!outputBinary) {
+  const [copyStatus, setCopyStatus] = useState('');
+  const hasOutput = Boolean(outputText);
+  const isExcelOutput = outputFormat === 'excel';
+
+  async function downloadOutput() {
+    if (!hasOutput) {
       return;
     }
 
+    const { generateExcel } = await import('@/lib/generators/generate-excel');
+    const outputBinary = generateExcel(table, { sheetName: excelSheetName });
     const arrayBuffer = outputBinary.buffer.slice(
       outputBinary.byteOffset,
       outputBinary.byteOffset + outputBinary.byteLength,
@@ -38,51 +50,53 @@ export function OutputPanel({
     URL.revokeObjectURL(url);
   }
 
+  async function copyOutput() {
+    if (!outputText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard?.writeText(outputText);
+      setCopyStatus('已复制结果。');
+    } catch {
+      setCopyStatus('复制失败，请手动选择结果内容。');
+    }
+  }
+
   return (
-    <section aria-labelledby="output-title" style={{ display: 'grid', gap: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+    <section className="panel output-panel" aria-labelledby="output-title">
+      <div className="panel-heading">
         <div>
-          <h2 id="output-title" style={{ margin: 0, fontSize: 18 }}>
-            结果
-          </h2>
-          <p style={{ margin: '6px 0 0', color: '#667085', fontSize: 14 }}>
-            复制结果后即可用于接口、文档或数据导入。
-          </p>
+          <p className="panel-kicker">输出</p>
+          <h3 id="output-title">转换结果</h3>
         </div>
-        {outputBinary ? (
-          <Button onClick={downloadOutput} variant="primary">
+        {isExcelOutput ? (
+          <Button disabled={!hasOutput} onClick={downloadOutput} variant="primary">
             下载
           </Button>
         ) : (
-          <Button
-            onClick={() => {
-              void navigator.clipboard?.writeText(outputText);
-            }}
-            variant="primary"
-          >
+          <Button disabled={!outputText} onClick={copyOutput} variant="primary">
             复制
           </Button>
         )}
       </div>
-      {showPrettyJson ? (
-        <Toggle label="美化 JSON" checked={prettyJson} onChange={(event) => onPrettyJsonChange(event.target.checked)} />
-      ) : null}
+
       <textarea
         aria-label="转换结果"
-        value={outputText}
+        className="code-area output-area"
+        name="output-text"
+        placeholder={getEmptyMessage(outputFormat)}
         readOnly
-        rows={12}
-        style={{
-          width: '100%',
-          border: '1px solid #c8d0dc',
-          borderRadius: 8,
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          fontSize: 14,
-          lineHeight: 1.5,
-          padding: 12,
-          resize: 'vertical',
-        }}
+        rows={14}
+        spellCheck={false}
+        value={outputText}
       />
+
+      {copyStatus || notice ? (
+        <p aria-live="polite" className="inline-message inline-message-success">
+          {copyStatus || notice}
+        </p>
+      ) : null}
     </section>
   );
 }
