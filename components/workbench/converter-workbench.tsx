@@ -339,7 +339,7 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
           <span className="brand-mark">T</span>
           <div>
             <p className="eyebrow">{formatLabel}</p>
-            <h2 id="workbench-title">在线转换工作台</h2>
+            <h2 id="workbench-title">在线转换工具</h2>
           </div>
         </div>
         <div className="workbench-top-actions">

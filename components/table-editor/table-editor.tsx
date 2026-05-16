@@ -29,7 +29,7 @@ export function TableEditor({
     <section className="panel table-panel" aria-labelledby="table-editor-title">
       <div className="panel-heading table-heading">
         <div>
-          <p className="panel-kicker">预览</p>
+          <p className="panel-kicker">编辑</p>
           <h3 id="table-editor-title">表格编辑</h3>
         </div>
         <div className="toolbar">

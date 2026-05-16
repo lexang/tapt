@@ -38,7 +38,7 @@ export default async function ConverterPage({ params }: ConverterRouteProps) {
 
   return (
     <main className="page-shell">
-      <section className="content-section" aria-labelledby="converter-page-title">
+      <section className="content-section converter-intro" aria-labelledby="converter-page-title">
         <h1 id="converter-page-title">{page.title}</h1>
         <p>{page.description}</p>
       </section>
