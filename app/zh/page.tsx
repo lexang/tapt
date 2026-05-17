@@ -4,6 +4,8 @@ import { HowToUseSection } from '@/components/seo/how-to-use-section';
 import { FaqSection } from '@/components/seo/faq-section';
 import { SocialProofSection } from '@/components/seo/social-proof-section';
 import { MatrixLinksSection } from '@/components/seo/matrix-links-section';
+import { ShareBanner } from '@/components/seo/share-banner';
+import { HeroSection } from '@/components/home/hero-section';
 
 export const metadata = {
   title: '表格转换工具 - 免费在线表格转换器',
@@ -13,15 +15,12 @@ export const metadata = {
 export default function ZhHomePage() {
   return (
     <main className="page-shell">
-      <section className="hero-section">
-        <h1 className="hero-title">免费在线表格转换器</h1>
-        <p className="hero-subtitle">粘贴、上传您的表格数据，轻松且安全地转换为 Excel、JSON、CSV、SQL 等数十种格式。</p>
-      </section>
+      <HeroSection />
 
       <ConverterWorkbench initialConverterId="excel-to-json" />
 
       <SocialProofSection />
-      
+
       <FeaturesSection />
 
       <HowToUseSection />
@@ -29,6 +28,8 @@ export default function ZhHomePage() {
       <MatrixLinksSection />
 
       <FaqSection />
+
+      <ShareBanner />
     </main>
   );
 }

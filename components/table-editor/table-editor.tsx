@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 
 type TableEditorProps = {
   canEdit: boolean;
+  statusLabel?: string;
+  statusClass?: string;
   table: TableData;
   onAddColumn: () => void;
   onAddRow: () => void;
@@ -20,6 +22,8 @@ type TableEditorProps = {
 
 export function TableEditor({
   canEdit,
+  statusLabel,
+  statusClass,
   table,
   onAddColumn,
   onAddRow,
@@ -39,6 +43,13 @@ export function TableEditor({
         <div>
           <p className="panel-kicker">编辑</p>
           <h3 id="table-editor-title">表格编辑</h3>
+          {statusLabel ? (
+            <div className="workbench-meta-inline" aria-label="表格状态">
+              <span className={`status-pill ${statusClass ?? ''}`}>{statusLabel}</span>
+              <span className="status-pill">{table.columns.length} 列</span>
+              <span className="status-pill">{table.rows.length} 行</span>
+            </div>
+          ) : null}
         </div>
         <div className="toolbar" style={{ alignItems: 'center' }}>
           <Button disabled={!canEdit} onClick={onTranspose} size="sm" variant="ghost" title="行列转置">转置</Button>

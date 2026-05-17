@@ -3,6 +3,8 @@ import { TableEditor } from '@/components/table-editor/table-editor';
 
 type EditorPanelProps = {
   canEdit: boolean;
+  statusLabel: string;
+  statusClass: string;
   table: TableData;
   onAddColumn: () => void;
   onAddRow: () => void;

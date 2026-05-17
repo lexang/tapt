@@ -17,12 +17,14 @@ type SourcePanelProps = {
   detectedFormat?: DetectedSourceFormat;
   error?: string;
   fileInfo?: SourceFileInfo;
+  formatOptions: Array<{ label: string; value: string }>;
   inputFormat: ConverterFormat;
   inputHint?: string;
   isReadingFile?: boolean;
   sourceName?: string;
   sourceText: string;
   onFileSelected: (file: File) => void;
+  onInputFormatChange: (value: ConverterFormat) => void;
   onParseAsDetectedFormat?: () => void;
   onSourceTextChange: (value: string) => void;
   onUseExample: () => void;
@@ -62,12 +64,14 @@ export function SourcePanel({
   detectedFormat,
   error,
   fileInfo,
+  formatOptions,
   inputFormat,
   inputHint,
   isReadingFile = false,
   sourceName,
   sourceText,
   onFileSelected,
+  onInputFormatChange,
   onParseAsDetectedFormat,
   onSourceTextChange,
   onUseExample,
@@ -98,9 +102,26 @@ export function SourcePanel({
           <p className="panel-kicker">输入</p>
           <h3 id="source-title">数据源</h3>
         </div>
-        <Button onClick={onUseExample} size="sm">
-          示例
-        </Button>
+        <div className="source-panel-heading-actions">
+          <label className="field">
+            <span>输入格式</span>
+            <select
+              className="control"
+              name="input-format"
+              onChange={(event) => onInputFormatChange(event.target.value as ConverterFormat)}
+              value={inputFormat}
+            >
+              {formatOptions.map((format) => (
+                <option key={format.value} value={format.value}>
+                  {format.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button onClick={onUseExample} size="sm">
+            示例
+          </Button>
+        </div>
       </div>
 
       <label

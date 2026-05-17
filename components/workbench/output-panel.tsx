@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { ConverterFormat } from '@/lib/converters/catalog';
 import type { TableData } from '@/lib/table/types';
-import { SocialShare } from '@/components/ui/social-share';
 
 type OutputPanelProps = {
   excelSheetName: string;
@@ -142,16 +141,11 @@ export function OutputPanel({
         value={outputText}
       />
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-        <div>
-          {copyStatus || notice ? (
-            <p aria-live="polite" className="inline-message inline-message-success output-feedback" style={{ margin: 0 }}>
-              {copyStatus || notice}
-            </p>
-          ) : null}
-        </div>
-        <SocialShare />
-      </div>
+      {copyStatus || notice ? (
+        <p aria-live="polite" className="inline-message inline-message-success output-feedback" style={{ margin: '12px 0 0' }}>
+          {copyStatus || notice}
+        </p>
+      ) : null}
     </section>
   );
 }

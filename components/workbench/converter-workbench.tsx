@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { useMemo, useReducer, useState } from 'react';
+import { useReducer, useState } from 'react';
 import { resolveConverter } from '@/lib/converters/resolve-converter';
 import { converterCatalog, type ConverterFormat } from '@/lib/converters/catalog';
 import type { TableData } from '@/lib/table/types';
@@ -513,12 +512,9 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
     outputBinary: undefined,
     options: defaultOptions,
   });
-  const formatLabel = useMemo(
-    () => `${state.inputFormat.toUpperCase()} 转 ${state.outputFormat.toUpperCase()}`,
-    [state.inputFormat, state.outputFormat],
-  );
   const canEditTable = hasTableData(state.table);
   const statusLabel = state.error ? '需要检查' : canEditTable ? '已就绪' : '等待数据';
+  const statusClass = state.error ? 'status-danger' : canEditTable ? 'status-ready' : '';
   const inputHint = state.error ? undefined : getSourceHint(state.sourceText, state.inputFormat, state.table);
   const matchingConverter = converterCatalog.find(
     (catalogItem) => catalogItem.inputFormat === state.inputFormat && catalogItem.outputFormat === state.outputFormat,
@@ -566,51 +562,21 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
   }
 
   return (
-    <section className="workbench" aria-labelledby="workbench-title">
-      <header className="workbench-topbar">
-        <div className="workbench-brand">
-          <span className="brand-mark">T</span>
-          <div>
-            <p className="eyebrow">{formatLabel}</p>
-            <h2 id="workbench-title">在线转换工具</h2>
-          </div>
-        </div>
-        <div className="workbench-top-actions">
-          <span className={`status-pill ${state.error ? 'status-danger' : canEditTable ? 'status-ready' : ''}`}>
-            {statusLabel}
-          </span>
-          <span>{state.table.columns.length} 列</span>
-          <span>{state.table.rows.length} 行</span>
-        </div>
-      </header>
+    <section id="workbench" className="workbench" aria-labelledby="workbench-title">
+      <h2 id="workbench-title" style={{ position: 'absolute', left: -9999, width: 1, height: 1, overflow: 'hidden' }}>
+        在线转换工作台
+      </h2>
 
       <div className="workbench-stack">
-        <section className="input-format-strip" aria-label="输入格式">
-          <label className="field format-select-field">
-            <span>输入格式</span>
-            <select
-              className="control"
-              name="input-format"
-              onChange={(event) => handleInputFormatChange(event.target.value as ConverterFormat)}
-              value={state.inputFormat}
-            >
-              {formatOptions.map((format) => (
-                <option key={format.value} value={format.value}>
-                  {format.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span>粘贴或上传 {formatLabels[state.inputFormat]} 数据。</span>
-        </section>
-
         <SourcePanel
           detectedFormat={detectedFormat}
           error={state.error}
           fileInfo={fileInfo}
+          formatOptions={formatOptions}
           inputFormat={state.inputFormat}
           inputHint={inputHint}
           isReadingFile={isReadingFile}
+          onInputFormatChange={handleInputFormatChange}
           sourceName={state.sourceName}
           sourceText={state.sourceText}
           onFileSelected={handleFileSelected}
@@ -629,6 +595,8 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
 
         <EditorPanel
           canEdit={canEditTable}
+          statusLabel={statusLabel}
+          statusClass={statusClass}
           table={state.table}
           onAddColumn={() => dispatch({ type: 'columnAdded' })}
           onAddRow={() => dispatch({ type: 'rowAdded' })}

@@ -1,45 +1,91 @@
-export function FeaturesSection() {
-  const features = [
-    {
-      title: '极速解析与转换',
-      description: '支持超大文件秒级解析，采用前沿前端技术，即时渲染并转换表格数据，无需等待服务器响应。',
-      icon: (
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-      )
-    },
-    {
-      title: '绝对安全隐私',
-      description: '所有文件读取、表格解析及数据生成均在您的浏览器本地完成，绝不会上传任何隐私数据到我们的服务器。',
-      icon: (
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-      )
-    },
-    {
-      title: '多格式无缝互转',
-      description: '支持 Excel, CSV, JSON, Markdown, HTML, SQL 等超过数十种常见数据格式的互相转换，一次操作满足全部需求。',
-      icon: (
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-        </svg>
-      )
-    }
-  ];
+import type { ReactNode } from 'react';
 
+type Feature = {
+  title: string;
+  description: string;
+  bullets: string[];
+  illustration: ReactNode;
+};
+
+const features: Feature[] = [
+  {
+    title: '极速解析',
+    description: '采用现代前端技术，常规表格在毫秒级完成解析和生成，操作完全无感等待。',
+    bullets: [
+      '本地完成，无需服务器往返',
+      '支持百万级字符 CSV / JSON',
+      '边输入边输出，无需点击转换',
+    ],
+    illustration: (
+      <div className="illu-speed" aria-hidden="true">
+        <div className="illu-speed-bar"><span /></div>
+        <div className="illu-speed-label">
+          <strong>0.2s</strong>
+          <small>典型 1MB 文件首屏渲染</small>
+        </div>
+      </div>
+    ),
+  },
+  {
+    title: '绝对安全',
+    description: '解析、编辑、生成全部在你的浏览器内完成。我们没有上传接口，看不到也存不下你的数据。',
+    bullets: [
+      '0 上传 · 0 存储 · 0 日志',
+      '可在离线断网环境下运行',
+      '开源实现，行为可审计',
+    ],
+    illustration: (
+      <div className="illu-shield" aria-hidden="true">
+        <div className="illu-shield-icon">✓</div>
+        <div className="illu-shield-text">数据从未离开浏览器</div>
+        <div className="illu-shield-net">network · blocked</div>
+      </div>
+    ),
+  },
+  {
+    title: '多格式互转',
+    description: 'Excel、CSV、JSON、SQL、Markdown、HTML 六大主流格式自由组合，30 条转换路径全部支持。',
+    bullets: [
+      '常用开发场景全覆盖',
+      '保留表头、列顺序与数据类型',
+      '一键复制或下载文件',
+    ],
+    illustration: (
+      <div className="illu-formats" aria-hidden="true">
+        <span className="chip teal">CSV</span>
+        <span className="arrow">⇄</span>
+        <span className="chip amber">JSON</span>
+        <span className="arrow">⇄</span>
+        <span className="chip">SQL</span>
+        <span className="arrow">⇄</span>
+        <span className="chip">MD</span>
+      </div>
+    ),
+  },
+];
+
+export function FeaturesSection() {
   return (
     <section className="content-section" aria-labelledby="features-title">
-      <h2 id="features-title">核心特性</h2>
-      <div className="features-grid">
-        {features.map((feature, idx) => (
-          <div key={idx} className="feature-card">
-            <div className="feature-icon">{feature.icon}</div>
-            <h3>{feature.title}</h3>
-            <p>{feature.description}</p>
-          </div>
-        ))}
+      <h2 id="features-title">为什么选择 TableConvert</h2>
+      <div className="features-zigzag">
+        {features.map((feature, idx) => {
+          const reverse = idx % 2 === 1;
+          return (
+            <div key={feature.title} className={`features-row${reverse ? ' reverse' : ''}`}>
+              <div className="features-text">
+                <h3>{feature.title}</h3>
+                <p>{feature.description}</p>
+                <ul>
+                  {feature.bullets.map((bullet) => (
+                    <li key={bullet}>{bullet}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="features-illustration">{feature.illustration}</div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
