@@ -3,6 +3,7 @@ import type { TableData } from '@/lib/table/types';
 export type SqlGeneratorOptions = {
   tableName?: string;
   includeCreateTable?: boolean;
+  multiRowInsert?: boolean;
 };
 
 function quoteIdentifier(identifier: string): string {
@@ -10,7 +11,14 @@ function quoteIdentifier(identifier: string): string {
 }
 
 function quoteValue(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+  const escaped = value
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "''")
+    .replace(/\0/g, '\\0')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\x1a/g, '\\Z');
+  return `'${escaped}'`;
 }
 
 export function generateSql(table: TableData, options: SqlGeneratorOptions = {}): string {
@@ -20,12 +28,20 @@ export function generateSql(table: TableData, options: SqlGeneratorOptions = {})
     .map((column) => `${quoteIdentifier(column)} TEXT`)
     .join(', ')});`;
 
-  const inserts = table.rows
-    .map((row) => {
-      const values = table.columns.map((_, index) => quoteValue(row[index]?.value ?? '')).join(', ');
-      return `INSERT INTO ${quoteIdentifier(tableName)} (${columns}) VALUES (${values});`;
-    })
-    .join('\n');
+  const tupleStrings = table.rows.map(
+    (row) => `(${table.columns.map((_, index) => quoteValue(row[index]?.value ?? '')).join(', ')})`,
+  );
+
+  let inserts = '';
+  if (tupleStrings.length > 0) {
+    if (options.multiRowInsert) {
+      inserts = `INSERT INTO ${quoteIdentifier(tableName)} (${columns}) VALUES\n  ${tupleStrings.join(',\n  ')};`;
+    } else {
+      inserts = tupleStrings
+        .map((tuple) => `INSERT INTO ${quoteIdentifier(tableName)} (${columns}) VALUES ${tuple};`)
+        .join('\n');
+    }
+  }
 
   if (!options.includeCreateTable) {
     return inserts;
@@ -33,3 +49,4 @@ export function generateSql(table: TableData, options: SqlGeneratorOptions = {})
 
   return [createTable, inserts].filter(Boolean).join('\n');
 }
+

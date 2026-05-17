@@ -15,43 +15,50 @@ describe('ConverterWorkbench', () => {
     expect(screen.getByText('还没有可预览的表格')).toBeTruthy();
   });
 
-  it('粘贴 CSV 后更新 JSON 结果', () => {
+  it('粘贴 CSV 后更新 JSON 结果', async () => {
     render(<ConverterWorkbench initialConverterId="csv-to-json" />);
 
     fireEvent.change(screen.getByLabelText('源数据'), {
       target: { value: 'name,age\nLin,30' },
     });
 
-    expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toContain('Lin');
+    await waitFor(() => {
+      expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toContain('Lin');
+    });
   });
 
-  it('按路由格式解析 JSON 输入', () => {
+  it('按路由格式解析 JSON 输入', async () => {
     render(<ConverterWorkbench initialConverterId="json-to-csv" />);
 
     fireEvent.change(screen.getByLabelText('源数据'), {
       target: { value: '[{"name":"Lin","age":30}]' },
     });
 
-    expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toBe('name,age\nLin,30');
+    await waitFor(() => {
+      expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toBe('name,age\nLin,30');
+    });
   });
 
-  it('非法 JSON 输入显示错误且不会崩溃', () => {
+  it('非法 JSON 输入显示错误且不会崩溃', async () => {
     render(<ConverterWorkbench initialConverterId="json-to-csv" />);
 
     fireEvent.change(screen.getByLabelText('源数据'), {
       target: { value: '[{"name":]' },
     });
 
-    expect(screen.getByRole('alert').textContent).toContain('请检查 JSON 数据格式');
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain('请检查 JSON 数据格式');
+    });
     expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toBe('');
   });
 
-  it('编辑单元格时按回车后更新输出', () => {
+  it('编辑单元格时按回车后更新输出', async () => {
     render(<ConverterWorkbench initialConverterId="csv-to-json" />);
 
     fireEvent.change(screen.getByLabelText('源数据'), {
       target: { value: 'name,age\nLin,30' },
     });
+    await waitFor(() => expect(screen.queryByLabelText('name 第 1 行')).not.toBeNull());
     const cellInput = screen.getByLabelText('name 第 1 行');
     fireEvent.change(cellInput, {
       target: { value: 'Ada' },
@@ -73,6 +80,7 @@ describe('ConverterWorkbench', () => {
     fireEvent.change(screen.getByLabelText('源数据'), {
       target: { value: 'name,age\nAda,36\nLin,30' },
     });
+    await waitFor(() => expect(screen.queryByLabelText('name 第 1 行')).not.toBeNull());
 
     const firstName = screen.getByLabelText('name 第 1 行') as HTMLInputElement;
     const firstAge = screen.getByLabelText('age 第 1 行') as HTMLInputElement;
@@ -102,11 +110,14 @@ describe('ConverterWorkbench', () => {
     expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toContain('"37"');
   });
 
-  it('JSON 输出选项可以切换为对象结构', () => {
+  it('JSON 输出选项可以切换为对象结构', async () => {
     render(<ConverterWorkbench initialConverterId="csv-to-json" />);
 
     fireEvent.change(screen.getByLabelText('源数据'), {
       target: { value: 'name,age\nLin,30' },
+    });
+    await waitFor(() => {
+      expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toContain('Lin');
     });
     fireEvent.change(screen.getByLabelText('JSON 结构'), {
       target: { value: 'object' },
@@ -115,17 +126,34 @@ describe('ConverterWorkbench', () => {
     expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toContain('"rows"');
   });
 
-  it('Excel 输出有数据后显示下载操作', () => {
+  it('Excel 输出有数据后显示下载操作', async () => {
     render(<ConverterWorkbench initialConverterId="json-to-excel" />);
 
     fireEvent.change(screen.getByLabelText('源数据'), {
       target: { value: '[{"name":"Lin","age":30}]' },
     });
 
+    await waitFor(() => {
+      expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toBe(
+        'Excel 文件已生成，可以下载使用。',
+      );
+    });
     expect(screen.getByRole('button', { name: '下载' })).toBeTruthy();
-    expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toBe(
-      'Excel 文件已生成，可以下载使用。',
-    );
+  });
+
+  it('Excel 输出禁用复制按钮', async () => {
+    render(<ConverterWorkbench initialConverterId="json-to-excel" />);
+
+    fireEvent.change(screen.getByLabelText('源数据'), {
+      target: { value: '[{"name":"Lin","age":30}]' },
+    });
+
+    await waitFor(() => {
+      expect((screen.getByRole('textbox', { name: '转换结果' }) as HTMLTextAreaElement).value).toBe(
+        'Excel 文件已生成，可以下载使用。',
+      );
+    });
+    expect((screen.getByRole('button', { name: '复制' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('点击下载会创建文件链接', async () => {
@@ -155,14 +183,22 @@ describe('ConverterWorkbench', () => {
     fireEvent.change(screen.getByLabelText('源数据'), {
       target: { value: '[{"name":"Lin","age":30}]' },
     });
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: '下载' }) as HTMLButtonElement).disabled).toBe(false);
+    });
     fireEvent.click(screen.getByRole('button', { name: '下载' }));
 
     await waitFor(() => {
       expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
       expect(click).toHaveBeenCalledTimes(1);
-      expect(revokeObjectUrl).toHaveBeenCalledWith('blob:table');
       expect(downloadLink?.download).toBe('json-to-excel.xlsx');
     });
+    await waitFor(
+      () => {
+        expect(revokeObjectUrl).toHaveBeenCalledWith('blob:table');
+      },
+      { timeout: 2000 },
+    );
   });
 
   it('非 Excel 结果可以下载为对应文本文件', async () => {
@@ -192,14 +228,22 @@ describe('ConverterWorkbench', () => {
     fireEvent.change(screen.getByLabelText('源数据'), {
       target: { value: 'name,age\nAda,36' },
     });
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: '下载' }) as HTMLButtonElement).disabled).toBe(false);
+    });
     fireEvent.click(screen.getByRole('button', { name: '下载' }));
 
     await waitFor(() => {
       expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
       expect(click).toHaveBeenCalledTimes(1);
-      expect(revokeObjectUrl).toHaveBeenCalledWith('blob:text');
       expect(downloadLink?.download).toBe('csv-to-json.json');
     });
+    await waitFor(
+      () => {
+        expect(revokeObjectUrl).toHaveBeenCalledWith('blob:text');
+      },
+      { timeout: 2000 },
+    );
     const downloadedBlob = createObjectUrl.mock.calls[0]?.[0] as Blob;
     expect(downloadedBlob.type).toBe('application/json;charset=utf-8');
   });

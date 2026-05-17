@@ -1,6 +1,6 @@
 'use client';
 
-import { useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { resolveConverter } from '@/lib/converters/resolve-converter';
 import { converterCatalog, type ConverterFormat } from '@/lib/converters/catalog';
 import type { TableData } from '@/lib/table/types';
@@ -40,6 +40,7 @@ type GeneratorOptions = {
   includeCsvHeader: boolean;
   sqlTableName: string;
   includeCreateTable: boolean;
+  sqlMultiRowInsert: boolean;
   excelSheetName: string;
 };
 
@@ -92,6 +93,7 @@ const defaultOptions: GeneratorOptions = {
   includeCsvHeader: true,
   sqlTableName: 'data_table',
   includeCreateTable: false,
+  sqlMultiRowInsert: false,
   excelSheetName: 'Sheet1',
 };
 
@@ -100,7 +102,7 @@ const exampleSources: Record<ConverterFormat, string> = {
   json: '[{"name":"Ada","age":"36","role":"Engineer"},{"name":"Lin","age":"30","role":"Designer"}]',
   markdown: '| name | age | role |\n| --- | --- | --- |\n| Ada | 36 | Engineer |\n| Lin | 30 | Designer |',
   html: '<table><thead><tr><th>name</th><th>age</th><th>role</th></tr></thead><tbody><tr><td>Ada</td><td>36</td><td>Engineer</td></tr><tr><td>Lin</td><td>30</td><td>Designer</td></tr></tbody></table>',
-  sql: "INSERT INTO `data_table` (`name`, `age`, `role`) VALUES ('Ada', '36', 'Engineer');\nINSERT INTO `data_table` (`name`, `age`, `role`) VALUES ('Lin', '30', 'Designer');",
+  sql: "INSERT INTO `data_table` (`name`, `age`, `role`) VALUES\n  ('Ada', '36', 'Engineer'),\n  ('Lin', '30', 'Designer'),\n  ('Grace', '24', 'Researcher');",
   excel: 'name,age,role\nAda,36,Engineer\nLin,30,Designer',
 };
 
@@ -275,6 +277,7 @@ function generateOutput(
       outputText: generateSql(table, {
         tableName: options.sqlTableName,
         includeCreateTable: options.includeCreateTable,
+        multiRowInsert: options.sqlMultiRowInsert,
       }),
       outputBinary: undefined,
     };
@@ -512,6 +515,29 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
     outputBinary: undefined,
     options: defaultOptions,
   });
+  const readRequestIdRef = useRef(0);
+  const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sourceTextDraft, setSourceTextDraft] = useState('');
+
+  function cancelPendingParse() {
+    if (parseTimerRef.current) {
+      clearTimeout(parseTimerRef.current);
+      parseTimerRef.current = null;
+    }
+  }
+
+  useEffect(() => {
+    setSourceTextDraft(state.sourceText);
+  }, [state.sourceText]);
+
+  useEffect(() => {
+    return () => {
+      if (parseTimerRef.current) {
+        clearTimeout(parseTimerRef.current);
+      }
+    };
+  }, []);
+
   const canEditTable = hasTableData(state.table);
   const statusLabel = state.error ? '需要检查' : canEditTable ? '已就绪' : '等待数据';
   const statusClass = state.error ? 'status-danger' : canEditTable ? 'status-ready' : '';
@@ -532,6 +558,11 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
       : undefined;
 
   async function handleFileSelected(file: File) {
+    cancelPendingParse();
+    const requestId = readRequestIdRef.current + 1;
+    readRequestIdRef.current = requestId;
+    const inputFormatSnapshot = state.inputFormat;
+
     setIsReadingFile(true);
     setFileInfo({
       name: file.name,
@@ -539,21 +570,35 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
     });
 
     try {
-      const result = await readFileAsTable(file, state.inputFormat);
+      const result = await readFileAsTable(file, inputFormatSnapshot);
+      if (requestId !== readRequestIdRef.current) {
+        return;
+      }
       dispatch({ type: 'fileParsed', fileName: file.name, ...result });
     } catch {
+      if (requestId !== readRequestIdRef.current) {
+        return;
+      }
       dispatch({
         type: 'parseFailed',
         sourceName: file.name,
         message: `无法读取 ${file.name}，请确认文件内容和当前输入格式匹配。`,
       });
     } finally {
-      setIsReadingFile(false);
+      if (requestId === readRequestIdRef.current) {
+        setIsReadingFile(false);
+      }
     }
   }
 
   function handleInputFormatChange(value: ConverterFormat) {
+    cancelPendingParse();
+    readRequestIdRef.current += 1;
+    setIsReadingFile(false);
     setFileInfo(undefined);
+    if (sourceTextDraft !== state.sourceText) {
+      dispatch({ type: 'sourceTextChanged', value: sourceTextDraft });
+    }
     dispatch({ type: 'inputFormatChanged', value });
   }
 
@@ -578,16 +623,29 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
           isReadingFile={isReadingFile}
           onInputFormatChange={handleInputFormatChange}
           sourceName={state.sourceName}
-          sourceText={state.sourceText}
+          sourceText={sourceTextDraft}
           onFileSelected={handleFileSelected}
           onParseAsDetectedFormat={
-            detectedFormat ? () => dispatch({ type: 'sourceTextParsedAs', inputFormat: detectedFormat.format }) : undefined
+            detectedFormat
+              ? () => {
+                  cancelPendingParse();
+                  if (sourceTextDraft !== state.sourceText) {
+                    dispatch({ type: 'sourceTextChanged', value: sourceTextDraft });
+                  }
+                  dispatch({ type: 'sourceTextParsedAs', inputFormat: detectedFormat.format });
+                }
+              : undefined
           }
           onSourceTextChange={(value) => {
             setFileInfo(undefined);
-            dispatch({ type: 'sourceTextChanged', value });
+            setSourceTextDraft(value);
+            cancelPendingParse();
+            parseTimerRef.current = setTimeout(() => {
+              dispatch({ type: 'sourceTextChanged', value });
+            }, 200);
           }}
           onUseExample={() => {
+            cancelPendingParse();
             setFileInfo(undefined);
             dispatch({ type: 'exampleLoaded' });
           }}
@@ -601,7 +659,10 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
           onAddColumn={() => dispatch({ type: 'columnAdded' })}
           onAddRow={() => dispatch({ type: 'rowAdded' })}
           onCellChange={(rowIndex, columnIndex, value) => dispatch({ type: 'cellChanged', rowIndex, columnIndex, value })}
-          onClearTable={() => dispatch({ type: 'tableCleared' })}
+          onClearTable={() => {
+            cancelPendingParse();
+            dispatch({ type: 'tableCleared' });
+          }}
           onColumnChange={(columnIndex, value) => dispatch({ type: 'columnChanged', columnIndex, value })}
           onDeleteColumn={(columnIndex) => dispatch({ type: 'columnDeleted', columnIndex })}
           onDeleteRow={(rowIndex) => dispatch({ type: 'rowDeleted', rowIndex })}

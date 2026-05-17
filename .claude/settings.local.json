@@ -4,7 +4,9 @@
       "Bash(npm install *)",
       "Bash(mkdir *)",
       "Bash(npm run *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(npm test *)",
+      "Bash(npx tsc *)"
     ]
   }
 }

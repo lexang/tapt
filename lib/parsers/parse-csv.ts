@@ -1,36 +1,74 @@
 import { createTableData } from '@/lib/table/ops';
 import type { TableData } from '@/lib/table/types';
 
-function parseCsvLine(line: string): string[] {
-  const values: string[] = [];
-  let currentValue = '';
-  let inQuotes = false;
+function stripBom(input: string): string {
+  return input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
+}
 
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    const nextChar = line[index + 1];
+function parseCsvRows(source: string): string[][] {
+  const rows: string[][] = [];
+  let current = '';
+  let row: string[] = [];
+  let inQuotes = false;
+  let fieldHadQuotes = false;
+
+  function commitField() {
+    row.push(fieldHadQuotes ? current : current.trim());
+    current = '';
+    fieldHadQuotes = false;
+  }
+
+  function commitRow() {
+    commitField();
+    rows.push(row);
+    row = [];
+  }
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    const nextChar = source[index + 1];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (nextChar === '"') {
+          current += '"';
+          index += 1;
+        } else {
+          inQuotes = false;
+        }
+        continue;
+      }
+      current += char;
+      continue;
+    }
 
     if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        currentValue += '"';
+      inQuotes = true;
+      fieldHadQuotes = true;
+      continue;
+    }
+
+    if (char === ',') {
+      commitField();
+      continue;
+    }
+
+    if (char === '\r' || char === '\n') {
+      commitRow();
+      if (char === '\r' && nextChar === '\n') {
         index += 1;
-      } else {
-        inQuotes = !inQuotes;
       }
       continue;
     }
 
-    if (char === ',' && !inQuotes) {
-      values.push(currentValue.trim());
-      currentValue = '';
-      continue;
-    }
-
-    currentValue += char;
+    current += char;
   }
 
-  values.push(currentValue.trim());
-  return values;
+  if (current.length > 0 || row.length > 0) {
+    commitRow();
+  }
+
+  return rows;
 }
 
 function normalizeRow(values: string[], columnCount: number): string[] {
@@ -38,16 +76,20 @@ function normalizeRow(values: string[], columnCount: number): string[] {
 }
 
 export function parseCsv(source: string): TableData {
-  const normalizedSource = source.trim();
-  if (normalizedSource.length === 0) {
+  const cleaned = stripBom(source);
+  if (cleaned.trim().length === 0) {
     return createTableData([], []);
   }
 
-  const [headerLine = '', ...bodyLines] = normalizedSource.split(/\r?\n/);
-  const columns = parseCsvLine(headerLine);
-  const rows = bodyLines
-    .filter((line) => line.trim().length > 0)
-    .map((line) => normalizeRow(parseCsvLine(line), columns.length));
+  const rawRows = parseCsvRows(cleaned);
+  const nonEmpty = rawRows.filter((row) => row.some((cell) => cell.length > 0));
 
-  return createTableData(columns, rows);
+  if (nonEmpty.length === 0) {
+    return createTableData([], []);
+  }
+
+  const [header, ...body] = nonEmpty;
+  const normalized = body.map((row) => normalizeRow(row, header.length));
+
+  return createTableData(header, normalized);
 }

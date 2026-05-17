@@ -12,6 +12,7 @@ type GeneratorOptions = {
   includeCsvHeader: boolean;
   sqlTableName: string;
   includeCreateTable: boolean;
+  sqlMultiRowInsert: boolean;
   excelSheetName: string;
 };
 
@@ -104,6 +105,11 @@ export function OptionsPanel({
               checked={options.includeCreateTable}
               label="包含建表语句"
               onChange={(event) => onOptionsChange({ includeCreateTable: event.target.checked })}
+            />
+            <Toggle
+              checked={options.sqlMultiRowInsert}
+              label="合并为单条 INSERT (多元组 VALUES)"
+              onChange={(event) => onOptionsChange({ sqlMultiRowInsert: event.target.checked })}
             />
           </>
         ) : null}

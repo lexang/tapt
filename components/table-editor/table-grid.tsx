@@ -29,6 +29,7 @@ type CellPosition = {
 
 function CommitInput({ ariaLabel, inputRef, name, onCommit, onMove, value }: CommitInputProps) {
   const [draftValue, setDraftValue] = useState(value);
+  const isComposingRef = useRef(false);
 
   useEffect(() => {
     setDraftValue(value);
@@ -54,7 +55,17 @@ function CommitInput({ ariaLabel, inputRef, name, onCommit, onMove, value }: Com
       autoComplete="off"
       name={name}
       onChange={(event) => setDraftValue(event.target.value)}
+      onCompositionStart={() => {
+        isComposingRef.current = true;
+      }}
+      onCompositionEnd={() => {
+        isComposingRef.current = false;
+      }}
       onKeyDown={(event) => {
+        if (isComposingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) {
+          return;
+        }
+
         if (event.key === 'Enter' || event.key === 'Tab') {
           event.preventDefault();
           onCommit(draftValue);

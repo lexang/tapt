@@ -48,8 +48,10 @@ function saveBlob(blob: Blob, fileName: string) {
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function OutputPanel({
@@ -115,7 +117,7 @@ export function OutputPanel({
           <h3 id="output-title">转换结果</h3>
         </div>
         <div className="output-actions">
-          <Button disabled={!outputText} onClick={copyOutput} variant="primary">
+          <Button disabled={!outputText || isExcelOutput} onClick={copyOutput} variant="primary">
             复制
           </Button>
           <Button disabled={!hasOutput} onClick={downloadOutput}>
