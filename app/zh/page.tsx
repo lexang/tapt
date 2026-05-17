@@ -1,10 +1,9 @@
-import Link from 'next/link';
 import { ConverterWorkbench } from '@/components/workbench/converter-workbench';
-import { converterPages } from '@/content/converters';
 import { FeaturesSection } from '@/components/seo/features-section';
 import { HowToUseSection } from '@/components/seo/how-to-use-section';
 import { FaqSection } from '@/components/seo/faq-section';
 import { SocialProofSection } from '@/components/seo/social-proof-section';
+import { MatrixLinksSection } from '@/components/seo/matrix-links-section';
 
 export const metadata = {
   title: '表格转换工具 - 免费在线表格转换器',
@@ -27,16 +26,7 @@ export default function ZhHomePage() {
 
       <HowToUseSection />
 
-      <section className="content-section" aria-labelledby="popular-converters">
-        <h2 id="popular-converters">常用转换器</h2>
-        <div className="link-grid" style={{ marginTop: 24 }}>
-          {converterPages.map((converter) => (
-            <Link key={converter.slug} href={`/zh/${converter.slug}`}>
-              {converter.title}
-            </Link>
-          ))}
-        </div>
-      </section>
+      <MatrixLinksSection />
 
       <FaqSection />
     </main>

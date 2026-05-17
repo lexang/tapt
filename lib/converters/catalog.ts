@@ -18,22 +18,16 @@ const formatLabels: Record<ConverterFormat, string> = {
   html: 'HTML',
 };
 
-const converterPairs: Array<[ConverterFormat, ConverterFormat]> = [
-  ['excel', 'json'],
-  ['excel', 'csv'],
-  ['excel', 'markdown'],
-  ['excel', 'sql'],
-  ['csv', 'json'],
-  ['csv', 'markdown'],
-  ['csv', 'sql'],
-  ['json', 'csv'],
-  ['json', 'excel'],
-  ['json', 'markdown'],
-  ['markdown', 'csv'],
-  ['markdown', 'json'],
-  ['html', 'csv'],
-  ['html', 'json'],
-];
+const allFormats: ConverterFormat[] = ['excel', 'csv', 'json', 'markdown', 'sql', 'html'];
+const converterPairs: Array<[ConverterFormat, ConverterFormat]> = [];
+
+for (const inputFormat of allFormats) {
+  for (const outputFormat of allFormats) {
+    if (inputFormat !== outputFormat) {
+      converterPairs.push([inputFormat, outputFormat]);
+    }
+  }
+}
 
 export const converterCatalog: ConverterDefinition[] = converterPairs.map(([inputFormat, outputFormat]) => {
   const inputLabel = formatLabels[inputFormat];
