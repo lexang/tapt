@@ -1,8 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useReducer, useState } from 'react';
 import { resolveConverter } from '@/lib/converters/resolve-converter';
-import type { ConverterFormat } from '@/lib/converters/catalog';
+import { converterCatalog, type ConverterFormat } from '@/lib/converters/catalog';
 import type { TableData } from '@/lib/table/types';
 import {
   addColumn,
@@ -61,6 +62,8 @@ type SourceFileInfo = {
 type WorkbenchAction =
   | { type: 'sourceTextChanged'; value: string }
   | { type: 'sourceTextParsedAs'; inputFormat: ConverterFormat }
+  | { type: 'inputFormatChanged'; value: ConverterFormat }
+  | { type: 'outputFormatChanged'; value: ConverterFormat }
   | { type: 'fileParsed'; table: TableData; fileName: string; sourceText?: string }
   | { type: 'parseFailed'; message: string; sourceName?: string }
   | { type: 'cellChanged'; rowIndex: number; columnIndex: number; value: string }
@@ -102,6 +105,11 @@ const formatLabels: Record<ConverterFormat, string> = {
   markdown: 'Markdown',
   sql: 'SQL',
 };
+
+const formatOptions = (Object.keys(formatLabels) as ConverterFormat[]).map((format) => ({
+  label: formatLabels[format],
+  value: format,
+}));
 
 function parseSourceText(sourceText: string, inputFormat: ConverterFormat): TableData {
   if (sourceText.trim().length === 0) {
@@ -309,6 +317,7 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
     try {
       const table = parseSourceText(state.sourceText, action.inputFormat);
       return withGeneratedOutput(state, table, {
+        inputFormat: action.inputFormat,
         error: undefined,
         parsedAsFormat: action.inputFormat,
         notice: `已按 ${formatLabels[action.inputFormat]} 解析。`,
@@ -323,6 +332,48 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
         notice: undefined,
       };
     }
+  }
+
+  if (action.type === 'inputFormatChanged') {
+    if (!state.sourceText.trim() && hasTableData(state.table)) {
+      return withGeneratedOutput(state, state.table, {
+        inputFormat: action.value,
+        error: undefined,
+        parsedAsFormat: undefined,
+        sourceName: undefined,
+        notice: `已切换为 ${formatLabels[action.value]} 输入。`,
+      });
+    }
+
+    try {
+      const table = parseSourceText(state.sourceText, action.value);
+      return withGeneratedOutput(state, table, {
+        inputFormat: action.value,
+        error: undefined,
+        parsedAsFormat: undefined,
+        sourceName: undefined,
+        notice: state.sourceText.trim() ? `已按 ${formatLabels[action.value]} 重新解析。` : undefined,
+      });
+    } catch {
+      return {
+        ...state,
+        inputFormat: action.value,
+        parsedAsFormat: undefined,
+        sourceName: undefined,
+        table: emptyTable,
+        outputText: '',
+        outputBinary: undefined,
+        error: getParseErrorMessage(action.value),
+        notice: undefined,
+      };
+    }
+  }
+
+  if (action.type === 'outputFormatChanged') {
+    return withGeneratedOutput(state, state.table, {
+      outputFormat: action.value,
+      notice: hasTableData(state.table) ? `已生成 ${formatLabels[action.value]} 结果。` : undefined,
+    });
   }
 
   if (action.type === 'fileParsed') {
@@ -445,6 +496,10 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
   const canEditTable = hasTableData(state.table);
   const statusLabel = state.error ? '需要检查' : canEditTable ? '已就绪' : '等待数据';
   const inputHint = state.error ? undefined : getSourceHint(state.sourceText, state.inputFormat, state.table);
+  const matchingConverter = converterCatalog.find(
+    (catalogItem) => catalogItem.inputFormat === state.inputFormat && catalogItem.outputFormat === state.outputFormat,
+  );
+  const matchingConverterLink = matchingConverter?.slug !== initialConverterId ? matchingConverter : undefined;
   const detectedInputFormat = detectSourceFormat(state.sourceText);
   const detectedFormat =
     detectedInputFormat &&
@@ -477,6 +532,15 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
     }
   }
 
+  function handleInputFormatChange(value: ConverterFormat) {
+    setFileInfo(undefined);
+    dispatch({ type: 'inputFormatChanged', value });
+  }
+
+  function handleOutputFormatChange(value: ConverterFormat) {
+    dispatch({ type: 'outputFormatChanged', value });
+  }
+
   return (
     <section className="workbench" aria-labelledby="workbench-title">
       <header className="workbench-topbar">
@@ -497,6 +561,25 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
       </header>
 
       <div className="workbench-stack">
+        <section className="input-format-strip" aria-label="输入格式">
+          <label className="field format-select-field">
+            <span>输入格式</span>
+            <select
+              className="control"
+              name="input-format"
+              onChange={(event) => handleInputFormatChange(event.target.value as ConverterFormat)}
+              value={state.inputFormat}
+            >
+              {formatOptions.map((format) => (
+                <option key={format.value} value={format.value}>
+                  {format.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span>粘贴或上传 {formatLabels[state.inputFormat]} 数据。</span>
+        </section>
+
         <SourcePanel
           detectedFormat={detectedFormat}
           error={state.error}
@@ -532,17 +615,14 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
           onDeleteRow={(rowIndex) => dispatch({ type: 'rowDeleted', rowIndex })}
         />
 
-        <section className="generator-panel" aria-labelledby="generator-title">
-          <div className="generator-heading">
-            <div>
-              <p className="panel-kicker">Generator</p>
-              <h3 id="generator-title">表格生成器</h3>
-            </div>
-          </div>
+        <section className="generator-panel" aria-label="生成结果">
           <OptionsPanel
+            formatOptions={formatOptions}
+            matchingConverterLink={matchingConverterLink}
             options={state.options}
             outputFormat={state.outputFormat}
             onOptionsChange={(value) => dispatch({ type: 'optionsChanged', value })}
+            onOutputFormatChange={(value) => handleOutputFormatChange(value)}
           />
           <OutputPanel
             excelSheetName={state.options.excelSheetName}
