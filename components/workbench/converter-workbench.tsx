@@ -14,6 +14,10 @@ import {
   deleteRow,
   updateCell,
   updateColumn,
+  transposeTable,
+  deleteEmptyRows,
+  deduplicateRows,
+  transformCase,
 } from '@/lib/table/ops';
 import { parseCsv } from '@/lib/parsers/parse-csv';
 import { parseJson } from '@/lib/parsers/parse-json';
@@ -74,7 +78,11 @@ type WorkbenchAction =
   | { type: 'columnDeleted'; columnIndex: number }
   | { type: 'tableCleared' }
   | { type: 'exampleLoaded' }
-  | { type: 'optionsChanged'; value: Partial<GeneratorOptions> };
+  | { type: 'optionsChanged'; value: Partial<GeneratorOptions> }
+  | { type: 'tableTransposed' }
+  | { type: 'emptyRowsDeleted' }
+  | { type: 'rowsDeduplicated' }
+  | { type: 'caseTransformed'; caseType: 'upper' | 'lower' };
 
 const emptyTable = createTableData([], []);
 
@@ -436,6 +444,22 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
     });
   }
 
+  if (action.type === 'tableTransposed') {
+    return withGeneratedOutput(state, transposeTable(state.table), { notice: '已转置表格。' });
+  }
+
+  if (action.type === 'emptyRowsDeleted') {
+    return withGeneratedOutput(state, deleteEmptyRows(state.table), { notice: '已删除空行。' });
+  }
+
+  if (action.type === 'rowsDeduplicated') {
+    return withGeneratedOutput(state, deduplicateRows(state.table), { notice: '已删除重复行。' });
+  }
+
+  if (action.type === 'caseTransformed') {
+    return withGeneratedOutput(state, transformCase(state.table, action.caseType), { notice: '已转换大小写。' });
+  }
+
   if (action.type === 'exampleLoaded') {
     try {
       const sourceText = exampleSources[state.inputFormat];
@@ -613,6 +637,10 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
           onColumnChange={(columnIndex, value) => dispatch({ type: 'columnChanged', columnIndex, value })}
           onDeleteColumn={(columnIndex) => dispatch({ type: 'columnDeleted', columnIndex })}
           onDeleteRow={(rowIndex) => dispatch({ type: 'rowDeleted', rowIndex })}
+          onTranspose={() => dispatch({ type: 'tableTransposed' })}
+          onDeleteEmpty={() => dispatch({ type: 'emptyRowsDeleted' })}
+          onDeduplicate={() => dispatch({ type: 'rowsDeduplicated' })}
+          onTransformCase={(caseType) => dispatch({ type: 'caseTransformed', caseType })}
         />
 
         <section className="generator-panel" aria-label="生成结果">

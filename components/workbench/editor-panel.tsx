@@ -11,6 +11,10 @@ type EditorPanelProps = {
   onColumnChange: (columnIndex: number, value: string) => void;
   onDeleteColumn: (columnIndex: number) => void;
   onDeleteRow: (rowIndex: number) => void;
+  onTranspose: () => void;
+  onDeleteEmpty: () => void;
+  onDeduplicate: () => void;
+  onTransformCase: (caseType: 'upper' | 'lower') => void;
 };
 
 export function EditorPanel(props: EditorPanelProps) {

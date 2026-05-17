@@ -1,9 +1,12 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './seo.css';
+import { GlobalHeader } from '@/components/layout/global-header';
+import { GlobalFooter } from '@/components/layout/global-footer';
 
 export const metadata: Metadata = {
-  title: '表格转换工具',
-  description: '粘贴、上传、编辑并转换表格数据',
+  title: '表格转换工具 - TableConvert',
+  description: '专业的在线表格数据转换工具，支持 Excel、JSON、CSV、SQL、Markdown 等数十种格式互转。全本地处理，保证绝对安全。',
 };
 
 export default function RootLayout({
@@ -13,7 +16,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <GlobalHeader />
+        {children}
+        <GlobalFooter />
+      </body>
     </html>
   );
 }

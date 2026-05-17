@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ConverterWorkbench } from '@/components/workbench/converter-workbench';
 import { converterPages, getConverterBySlug } from '@/content/converters';
+import { FeaturesSection } from '@/components/seo/features-section';
+import { SocialProofSection } from '@/components/seo/social-proof-section';
 
 type ConverterRouteProps = {
   params: Promise<{ slug: string }>;
@@ -38,33 +40,47 @@ export default async function ConverterPage({ params }: ConverterRouteProps) {
 
   return (
     <main className="page-shell">
-      <section className="content-section converter-intro" aria-labelledby="converter-page-title">
-        <h1 id="converter-page-title">{page.title}</h1>
-        <p>{page.description}</p>
+      <section className="hero-section text-center" style={{ marginTop: 24 }}>
+        <h1 className="hero-title">{page.title}</h1>
+        <p className="hero-subtitle">{page.description}</p>
       </section>
+      
       <ConverterWorkbench initialConverterId={page.slug} />
+
+      <SocialProofSection />
+      
+      <FeaturesSection />
+
       <section className="content-section" aria-labelledby="how-to-use">
         <h2 id="how-to-use">如何使用 {page.title}</h2>
-        <ol>
-          {page.steps.map((step) => (
-            <li key={step}>{step}</li>
+        <div className="steps-list">
+          {page.steps.map((step, idx) => (
+            <div key={idx} className="step-item">
+              <div className="step-number">{idx + 1}</div>
+              <div className="step-content">
+                <h3>步骤 {idx + 1}</h3>
+                <p>{step}</p>
+              </div>
+            </div>
           ))}
-        </ol>
+        </div>
       </section>
+
       <section className="content-section" aria-labelledby="converter-faq">
         <h2 id="converter-faq">常见问题</h2>
         <div className="faq-list">
           {page.faqs.map((faq) => (
-            <article key={faq.question}>
+            <div key={faq.question} className="faq-item">
               <h3>{faq.question}</h3>
               <p>{faq.answer}</p>
-            </article>
+            </div>
           ))}
         </div>
       </section>
+
       <section className="content-section" aria-labelledby="related-converters">
         <h2 id="related-converters">相关转换器</h2>
-        <div className="link-grid">
+        <div className="link-grid" style={{ marginTop: 24 }}>
           {page.relatedSlugs.map((relatedSlug) => {
             const related = getConverterBySlug(relatedSlug);
             return (

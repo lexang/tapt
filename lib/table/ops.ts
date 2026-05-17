@@ -89,3 +89,52 @@ export function deleteColumn(table: TableData, columnIndex: number): TableData {
 export function clearTable(): TableData {
   return createTableData([], []);
 }
+
+export function transposeTable(table: TableData): TableData {
+  if (table.columns.length === 0 && table.rows.length === 0) {
+    return table;
+  }
+
+  const matrix = [table.columns, ...table.rows.map(row => row.map(cell => cell.value))];
+  const transposedMatrix = matrix[0].map((_, colIndex) => matrix.map(row => row[colIndex]));
+  
+  const newColumns = transposedMatrix[0] || [];
+  const newRows = transposedMatrix.slice(1).map(row => createTableRow(row));
+  
+  return normalizeTable({ columns: newColumns, rows: newRows });
+}
+
+export function deleteEmptyRows(table: TableData): TableData {
+  return normalizeTable({
+    ...table,
+    rows: table.rows.filter(row => row.some(cell => cell.value.trim() !== '')),
+  });
+}
+
+export function deduplicateRows(table: TableData): TableData {
+  const seen = new Set<string>();
+  const newRows = table.rows.filter(row => {
+    const key = row.map(cell => cell.value).join('|~|');
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  
+  return normalizeTable({
+    ...table,
+    rows: newRows,
+  });
+}
+
+export function transformCase(table: TableData, caseType: 'upper' | 'lower'): TableData {
+  return normalizeTable({
+    ...table,
+    rows: table.rows.map(row => 
+      row.map(cell => createTableCell(
+        caseType === 'upper' ? cell.value.toUpperCase() : cell.value.toLowerCase()
+      ))
+    )
+  });
+}
