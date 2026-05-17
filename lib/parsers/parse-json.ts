@@ -2,7 +2,17 @@ import { createTableData } from '@/lib/table/ops';
 import type { TableData } from '@/lib/table/types';
 
 function toCellValue(value: unknown): string {
-  return value === undefined || value === null ? '' : String(value);
+  if (value === undefined || value === null) {
+    return '';
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

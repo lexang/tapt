@@ -9,4 +9,16 @@ describe('generateCsv', () => {
       }),
     ).toBe('name,note\n"Ada, Lovelace","said ""hi"""');
   });
+
+  it('自定义 delimiter 时字段含该 delimiter 也会加引号', () => {
+    expect(
+      generateCsv(
+        {
+          columns: ['key', 'value'],
+          rows: [[{ value: 'a;b' }, { value: 'c' }]],
+        },
+        { delimiter: ';' },
+      ),
+    ).toBe('key;value\n"a;b";c');
+  });
 });

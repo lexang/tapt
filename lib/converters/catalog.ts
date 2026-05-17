@@ -18,6 +18,13 @@ const formatLabels: Record<ConverterFormat, string> = {
   html: 'HTML',
 };
 
+export const FORMAT_LABELS = formatLabels;
+
+export const FORMAT_OPTIONS = (Object.keys(formatLabels) as ConverterFormat[]).map((format) => ({
+  label: formatLabels[format],
+  value: format,
+}));
+
 const allFormats: ConverterFormat[] = ['excel', 'csv', 'json', 'markdown', 'sql', 'html'];
 const converterPairs: Array<[ConverterFormat, ConverterFormat]> = [];
 

@@ -17,4 +17,11 @@ describe('parseJson', () => {
       ],
     });
   });
+
+  it('嵌套对象与数组用 JSON.stringify 替代 [object Object]', () => {
+    expect(parseJson('[{"a":{"x":1},"b":[1,2]}]')).toEqual({
+      columns: ['a', 'b'],
+      rows: [[{ value: '{"x":1}' }, { value: '[1,2]' }]],
+    });
+  });
 });

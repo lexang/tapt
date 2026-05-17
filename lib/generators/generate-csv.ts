@@ -1,7 +1,7 @@
 import type { TableData } from '@/lib/table/types';
 
-function escapeCsvValue(value: string): string {
-  if (!/[",\r\n]/.test(value)) {
+function escapeCsvValue(value: string, delimiter: string): string {
+  if (!value.includes('"') && !value.includes(delimiter) && !value.includes('\r') && !value.includes('\n')) {
     return value;
   }
 
@@ -9,7 +9,7 @@ function escapeCsvValue(value: string): string {
 }
 
 function formatRow(values: string[], delimiter: string): string {
-  return values.map(escapeCsvValue).join(delimiter);
+  return values.map((value) => escapeCsvValue(value, delimiter)).join(delimiter);
 }
 
 export type CsvGeneratorOptions = {

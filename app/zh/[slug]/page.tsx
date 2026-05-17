@@ -23,9 +23,24 @@ export async function generateMetadata({ params }: ConverterRouteProps): Promise
     return {};
   }
 
+  const url = `/zh/${slug}`;
+
   return {
     title: page.title,
     description: page.description,
+    alternates: {
+      canonical: url,
+    },
+    openGraph: {
+      title: page.title,
+      description: page.description,
+      url,
+      type: 'website',
+    },
+    twitter: {
+      title: page.title,
+      description: page.description,
+    },
   };
 }
 
@@ -39,8 +54,44 @@ export default async function ConverterPage({ params }: ConverterRouteProps) {
     notFound();
   }
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'SoftwareApplication',
+        name: page.title,
+        description: page.description,
+        applicationCategory: 'BusinessApplication',
+        operatingSystem: 'Web Browser',
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'CNY' },
+      },
+      {
+        '@type': 'FAQPage',
+        mainEntity: page.faqs.map((faq) => ({
+          '@type': 'Question',
+          name: faq.question,
+          acceptedAnswer: { '@type': 'Answer', text: faq.answer },
+        })),
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: '首页', item: '/zh' },
+          { '@type': 'ListItem', position: 2, name: page.title, item: `/zh/${slug}` },
+        ],
+      },
+    ],
+  };
+
   return (
     <main className="page-shell">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c'),
+        }}
+      />
+
       <section className="converter-hero" aria-labelledby="converter-title">
         <span className="hero-eyebrow">在线 · 免费 · 浏览器本地</span>
         <h1 id="converter-title">{page.title}</h1>

@@ -2,7 +2,12 @@
 
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { resolveConverter } from '@/lib/converters/resolve-converter';
-import { converterCatalog, type ConverterFormat } from '@/lib/converters/catalog';
+import {
+  converterCatalog,
+  FORMAT_LABELS as formatLabels,
+  FORMAT_OPTIONS as formatOptions,
+  type ConverterFormat,
+} from '@/lib/converters/catalog';
 import type { TableData } from '@/lib/table/types';
 import {
   addColumn,
@@ -52,7 +57,6 @@ type WorkbenchState = {
   parsedAsFormat?: ConverterFormat;
   table: TableData;
   outputText: string;
-  outputBinary?: Uint8Array;
   error?: string;
   notice?: string;
   options: GeneratorOptions;
@@ -86,6 +90,8 @@ type WorkbenchAction =
 
 const emptyTable = createTableData([], []);
 
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
 const defaultOptions: GeneratorOptions = {
   prettyJson: true,
   jsonShape: 'array',
@@ -105,20 +111,6 @@ const exampleSources: Record<ConverterFormat, string> = {
   sql: "INSERT INTO `data_table` (`name`, `age`, `role`) VALUES\n  ('Ada', '36', 'Engineer'),\n  ('Lin', '30', 'Designer'),\n  ('Grace', '24', 'Researcher');",
   excel: 'name,age,role\nAda,36,Engineer\nLin,30,Designer',
 };
-
-const formatLabels: Record<ConverterFormat, string> = {
-  csv: 'CSV',
-  excel: 'Excel',
-  html: 'HTML',
-  json: 'JSON',
-  markdown: 'Markdown',
-  sql: 'SQL',
-};
-
-const formatOptions = (Object.keys(formatLabels) as ConverterFormat[]).map((format) => ({
-  label: formatLabels[format],
-  value: format,
-}));
 
 function parseSourceText(sourceText: string, inputFormat: ConverterFormat): TableData {
   if (sourceText.trim().length === 0) {
@@ -159,6 +151,28 @@ function formatFileSize(size: number) {
   }
 
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function sanitizeFileName(name: string): string {
+  return name
+    .replace(/[\\/]/g, '_')
+    .replace(/[\x00-\x1f]/g, '')
+    .slice(0, 200)
+    .trim();
+}
+
+function deriveOutputFileName(
+  sourceName: string | undefined,
+  inputFormat: ConverterFormat,
+  outputFormat: ConverterFormat,
+): string {
+  const fallback = `${inputFormat}-to-${outputFormat}`;
+  if (!sourceName) {
+    return fallback;
+  }
+  const baseName = sourceName.replace(/\.[^./\\]+$/, '');
+  const cleaned = sanitizeFileName(baseName);
+  return cleaned || fallback;
 }
 
 function getSourceHint(sourceText: string, inputFormat: ConverterFormat, table: TableData) {
@@ -239,62 +253,52 @@ function generateOutput(
   table: TableData,
   outputFormat: ConverterFormat,
   options: GeneratorOptions,
-): Pick<WorkbenchState, 'outputText' | 'outputBinary'> {
+): string {
   if (!hasTableData(table)) {
-    return { outputText: '', outputBinary: undefined };
+    return '';
   }
 
   if (outputFormat === 'json') {
-    return {
-      outputText: generateJson(table, {
-        pretty: options.prettyJson,
-        shape: options.jsonShape,
-      }),
-      outputBinary: undefined,
-    };
+    return generateJson(table, {
+      pretty: options.prettyJson,
+      shape: options.jsonShape,
+    });
   }
 
   if (outputFormat === 'csv') {
-    return {
-      outputText: generateCsv(table, {
-        delimiter: options.csvDelimiter,
-        includeHeader: options.includeCsvHeader,
-      }),
-      outputBinary: undefined,
-    };
+    return generateCsv(table, {
+      delimiter: options.csvDelimiter,
+      includeHeader: options.includeCsvHeader,
+    });
   }
 
   if (outputFormat === 'markdown') {
-    return { outputText: generateMarkdown(table), outputBinary: undefined };
+    return generateMarkdown(table);
   }
 
   if (outputFormat === 'html') {
-    return { outputText: generateHtml(table), outputBinary: undefined };
+    return generateHtml(table);
   }
 
   if (outputFormat === 'sql') {
-    return {
-      outputText: generateSql(table, {
-        tableName: options.sqlTableName,
-        includeCreateTable: options.includeCreateTable,
-        multiRowInsert: options.sqlMultiRowInsert,
-      }),
-      outputBinary: undefined,
-    };
+    return generateSql(table, {
+      tableName: options.sqlTableName,
+      includeCreateTable: options.includeCreateTable,
+      multiRowInsert: options.sqlMultiRowInsert,
+    });
   }
 
-  return {
-    outputText: 'Excel 文件已生成，可以下载使用。',
-    outputBinary: undefined,
-  };
+  return 'Excel 文件已生成，可以下载使用。';
 }
 
 function withGeneratedOutput(state: WorkbenchState, table: TableData, nextState: Partial<WorkbenchState> = {}): WorkbenchState {
+  const outputFormat = nextState.outputFormat ?? state.outputFormat;
+  const options = nextState.options ?? state.options;
   return {
     ...state,
     ...nextState,
     table,
-    ...generateOutput(table, nextState.outputFormat ?? state.outputFormat, nextState.options ?? state.options),
+    outputText: generateOutput(table, outputFormat, options),
   };
 }
 
@@ -316,7 +320,6 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
         parsedAsFormat: undefined,
         table: emptyTable,
         outputText: '',
-        outputBinary: undefined,
         error: getParseErrorMessage(state.inputFormat),
         notice: undefined,
       };
@@ -337,7 +340,6 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
         ...state,
         table: emptyTable,
         outputText: '',
-        outputBinary: undefined,
         error: getParseErrorMessage(action.inputFormat),
         notice: undefined,
       };
@@ -372,7 +374,6 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
         sourceName: undefined,
         table: emptyTable,
         outputText: '',
-        outputBinary: undefined,
         error: getParseErrorMessage(action.value),
         notice: undefined,
       };
@@ -404,7 +405,6 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
       error: action.message,
       notice: undefined,
       outputText: '',
-      outputBinary: undefined,
     };
   }
 
@@ -512,7 +512,6 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
     sourceText: '',
     table: emptyTable,
     outputText: '',
-    outputBinary: undefined,
     options: defaultOptions,
   });
   const readRequestIdRef = useRef(0);
@@ -559,6 +558,20 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
 
   async function handleFileSelected(file: File) {
     cancelPendingParse();
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      dispatch({
+        type: 'parseFailed',
+        sourceName: file.name,
+        message: `${file.name} 超过单文件 ${formatFileSize(MAX_UPLOAD_BYTES)} 上限,请拆分后再上传。`,
+      });
+      setFileInfo({
+        name: file.name,
+        size: formatFileSize(file.size),
+      });
+      return;
+    }
+
     const requestId = readRequestIdRef.current + 1;
     readRequestIdRef.current = requestId;
     const inputFormatSnapshot = state.inputFormat;
@@ -684,7 +697,7 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
           <OutputPanel
             excelSheetName={state.options.excelSheetName}
             notice={state.notice}
-            outputFileName={`${state.inputFormat}-to-${state.outputFormat}`}
+            outputFileName={deriveOutputFileName(state.sourceName, state.inputFormat, state.outputFormat)}
             outputFormat={state.outputFormat}
             outputText={state.outputText}
             table={state.table}

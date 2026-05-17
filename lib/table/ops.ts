@@ -91,16 +91,18 @@ export function clearTable(): TableData {
 }
 
 export function transposeTable(table: TableData): TableData {
-  if (table.columns.length === 0 && table.rows.length === 0) {
-    return table;
+  const normalized = normalizeTable(table);
+
+  if (normalized.columns.length === 0) {
+    return normalized;
   }
 
-  const matrix = [table.columns, ...table.rows.map(row => row.map(cell => cell.value))];
-  const transposedMatrix = matrix[0].map((_, colIndex) => matrix.map(row => row[colIndex]));
-  
-  const newColumns = transposedMatrix[0] || [];
-  const newRows = transposedMatrix.slice(1).map(row => createTableRow(row));
-  
+  const matrix = [normalized.columns, ...normalized.rows.map((row) => row.map((cell) => cell.value))];
+  const transposedMatrix = matrix[0].map((_, colIndex) => matrix.map((row) => row[colIndex] ?? ''));
+
+  const newColumns = transposedMatrix[0] ?? [];
+  const newRows = transposedMatrix.slice(1).map((row) => createTableRow(row));
+
   return normalizeTable({ columns: newColumns, rows: newRows });
 }
 
@@ -113,15 +115,15 @@ export function deleteEmptyRows(table: TableData): TableData {
 
 export function deduplicateRows(table: TableData): TableData {
   const seen = new Set<string>();
-  const newRows = table.rows.filter(row => {
-    const key = row.map(cell => cell.value).join('|~|');
+  const newRows = table.rows.filter((row) => {
+    const key = JSON.stringify(row.map((cell) => cell.value));
     if (seen.has(key)) {
       return false;
     }
     seen.add(key);
     return true;
   });
-  
+
   return normalizeTable({
     ...table,
     rows: newRows,

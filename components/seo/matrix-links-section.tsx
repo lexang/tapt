@@ -1,15 +1,6 @@
 import Link from 'next/link';
 import { converterPages, type ConverterPage } from '@/content/converters';
-import type { ConverterFormat } from '@/lib/converters/catalog';
-
-const formatLabels: Record<ConverterFormat, string> = {
-  excel: 'Excel',
-  csv: 'CSV',
-  json: 'JSON',
-  markdown: 'Markdown',
-  sql: 'SQL',
-  html: 'HTML',
-};
+import { FORMAT_LABELS, type ConverterFormat } from '@/lib/converters/catalog';
 
 export function MatrixLinksSection() {
   const groupedConverters = converterPages.reduce((acc, page) => {
@@ -28,7 +19,7 @@ export function MatrixLinksSection() {
       <div className="matrix-grid">
         {formats.map((format) => (
           <div key={format} className="matrix-column">
-            <h3>从 {formatLabels[format]} 转换</h3>
+            <h3>从 {FORMAT_LABELS[format]} 转换</h3>
             <ul className="matrix-list">
               {groupedConverters[format].map((converter) => (
                 <li key={converter.slug}>

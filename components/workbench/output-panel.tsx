@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { ConverterFormat } from '@/lib/converters/catalog';
 import type { TableData } from '@/lib/table/types';
@@ -66,6 +66,16 @@ export function OutputPanel({
   const hasOutput = Boolean(outputText);
   const isExcelOutput = outputFormat === 'excel';
   const resolvedFileName = getOutputFileName(outputFormat, outputFileName);
+  const tableRef = useRef(table);
+  const excelSheetNameRef = useRef(excelSheetName);
+
+  useEffect(() => {
+    tableRef.current = table;
+  }, [table]);
+
+  useEffect(() => {
+    excelSheetNameRef.current = excelSheetName;
+  }, [excelSheetName]);
 
   async function downloadOutput() {
     if (!hasOutput) {
@@ -74,7 +84,7 @@ export function OutputPanel({
 
     if (isExcelOutput) {
       const { generateExcel } = await import('@/lib/generators/generate-excel');
-      const outputBinary = generateExcel(table, { sheetName: excelSheetName });
+      const outputBinary = generateExcel(tableRef.current, { sheetName: excelSheetNameRef.current });
       const arrayBuffer = outputBinary.buffer.slice(
         outputBinary.byteOffset,
         outputBinary.byteOffset + outputBinary.byteLength,
