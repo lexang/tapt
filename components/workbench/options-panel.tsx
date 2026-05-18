@@ -1,23 +1,12 @@
-import type { ReactNode } from 'react';
 import type { ConverterFormat } from '@/lib/converters/catalog';
+import type { GeneratorOptions } from '@/lib/converters/formats';
 import { Select } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
 
 import Link from 'next/link';
 
-type GeneratorOptions = {
-  prettyJson: boolean;
-  jsonShape: 'array' | 'object';
-  csvDelimiter: ',' | ';' | '\t';
-  includeCsvHeader: boolean;
-  sqlTableName: string;
-  includeCreateTable: boolean;
-  sqlMultiRowInsert: boolean;
-  excelSheetName: string;
-};
-
 type OptionsPanelProps = {
-  formatOptions: Array<{ label: string; value: string }>;
+  formatOptions: ReadonlyArray<{ label: string; value: string }>;
   matchingConverterLink?: { slug: string; title: string };
   options: GeneratorOptions;
   outputFormat: ConverterFormat;

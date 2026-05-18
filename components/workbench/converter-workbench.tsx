@@ -8,6 +8,7 @@ import {
   FORMAT_OPTIONS as formatOptions,
   type ConverterFormat,
 } from '@/lib/converters/catalog';
+import { FORMAT_MODULES, type GeneratorOptions } from '@/lib/converters/formats';
 import type { TableData } from '@/lib/table/types';
 import {
   addColumn,
@@ -23,31 +24,10 @@ import {
   deduplicateRows,
   transformCase,
 } from '@/lib/table/ops';
-import { parseCsv } from '@/lib/parsers/parse-csv';
-import { parseJson } from '@/lib/parsers/parse-json';
-import { parseMarkdown } from '@/lib/parsers/parse-markdown';
-import { parseHtml } from '@/lib/parsers/parse-html';
-import { parseSql } from '@/lib/parsers/parse-sql';
-import { generateJson } from '@/lib/generators/generate-json';
-import { generateCsv } from '@/lib/generators/generate-csv';
-import { generateMarkdown } from '@/lib/generators/generate-markdown';
-import { generateHtml } from '@/lib/generators/generate-html';
-import { generateSql } from '@/lib/generators/generate-sql';
 import { SourcePanel } from '@/components/workbench/source-panel';
 import { EditorPanel } from '@/components/workbench/editor-panel';
 import { OutputPanel } from '@/components/workbench/output-panel';
 import { OptionsPanel } from '@/components/workbench/options-panel';
-
-type GeneratorOptions = {
-  prettyJson: boolean;
-  jsonShape: 'array' | 'object';
-  csvDelimiter: ',' | ';' | '\t';
-  includeCsvHeader: boolean;
-  sqlTableName: string;
-  includeCreateTable: boolean;
-  sqlMultiRowInsert: boolean;
-  excelSheetName: string;
-};
 
 type WorkbenchState = {
   inputFormat: ConverterFormat;
@@ -103,37 +83,12 @@ const defaultOptions: GeneratorOptions = {
   excelSheetName: 'Sheet1',
 };
 
-const exampleSources: Record<ConverterFormat, string> = {
-  csv: 'name,age,role\nAda,36,Engineer\nLin,30,Designer',
-  json: '[{"name":"Ada","age":"36","role":"Engineer"},{"name":"Lin","age":"30","role":"Designer"}]',
-  markdown: '| name | age | role |\n| --- | --- | --- |\n| Ada | 36 | Engineer |\n| Lin | 30 | Designer |',
-  html: '<table><thead><tr><th>name</th><th>age</th><th>role</th></tr></thead><tbody><tr><td>Ada</td><td>36</td><td>Engineer</td></tr><tr><td>Lin</td><td>30</td><td>Designer</td></tr></tbody></table>',
-  sql: "INSERT INTO `data_table` (`name`, `age`, `role`) VALUES\n  ('Ada', '36', 'Engineer'),\n  ('Lin', '30', 'Designer'),\n  ('Grace', '24', 'Researcher');",
-  excel: 'name,age,role\nAda,36,Engineer\nLin,30,Designer',
-};
-
 function parseSourceText(sourceText: string, inputFormat: ConverterFormat): TableData {
   if (sourceText.trim().length === 0) {
     return emptyTable;
   }
 
-  if (inputFormat === 'json') {
-    return parseJson(sourceText);
-  }
-
-  if (inputFormat === 'markdown') {
-    return parseMarkdown(sourceText);
-  }
-
-  if (inputFormat === 'html') {
-    return parseHtml(sourceText);
-  }
-
-  if (inputFormat === 'sql') {
-    return parseSql(sourceText);
-  }
-
-  return parseCsv(sourceText);
+  return FORMAT_MODULES[inputFormat].parseText(sourceText);
 }
 
 function getParseErrorMessage(inputFormat: ConverterFormat): string {
@@ -258,34 +213,9 @@ function generateOutput(
     return '';
   }
 
-  if (outputFormat === 'json') {
-    return generateJson(table, {
-      pretty: options.prettyJson,
-      shape: options.jsonShape,
-    });
-  }
-
-  if (outputFormat === 'csv') {
-    return generateCsv(table, {
-      delimiter: options.csvDelimiter,
-      includeHeader: options.includeCsvHeader,
-    });
-  }
-
-  if (outputFormat === 'markdown') {
-    return generateMarkdown(table);
-  }
-
-  if (outputFormat === 'html') {
-    return generateHtml(table);
-  }
-
-  if (outputFormat === 'sql') {
-    return generateSql(table, {
-      tableName: options.sqlTableName,
-      includeCreateTable: options.includeCreateTable,
-      multiRowInsert: options.sqlMultiRowInsert,
-    });
+  const generate = FORMAT_MODULES[outputFormat].generateText;
+  if (generate) {
+    return generate(table, options);
   }
 
   return 'Excel 文件已生成，可以下载使用。';
@@ -464,7 +394,7 @@ function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState
 
   if (action.type === 'exampleLoaded') {
     try {
-      const sourceText = exampleSources[state.inputFormat];
+      const sourceText = FORMAT_MODULES[state.inputFormat].exampleSource;
       const table = parseSourceText(sourceText, state.inputFormat === 'excel' ? 'csv' : state.inputFormat);
       return withGeneratedOutput(state, table, {
         sourceText,

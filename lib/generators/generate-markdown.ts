@@ -1,7 +1,10 @@
 import type { TableData } from '@/lib/table/types';
 
 function escapeMarkdownCell(value: string): string {
-  return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\r?\n/g, '<br>');
 }
 
 function formatRow(values: string[]): string {

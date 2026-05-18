@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { ConverterFormat } from '@/lib/converters/catalog';
+import { FORMAT_MODULES } from '@/lib/converters/formats';
 import type { TableData } from '@/lib/table/types';
 
 type OutputPanelProps = {
@@ -16,25 +17,8 @@ function getEmptyMessage(outputFormat: ConverterFormat): string {
   return `粘贴或上传数据后，这里会显示 ${outputFormat.toUpperCase()} 结果…`;
 }
 
-const outputExtensions: Record<ConverterFormat, string> = {
-  csv: 'csv',
-  excel: 'xlsx',
-  html: 'html',
-  json: 'json',
-  markdown: 'md',
-  sql: 'sql',
-};
-
-const textMimeTypes: Record<Exclude<ConverterFormat, 'excel'>, string> = {
-  csv: 'text/csv;charset=utf-8',
-  html: 'text/html;charset=utf-8',
-  json: 'application/json;charset=utf-8',
-  markdown: 'text/markdown;charset=utf-8',
-  sql: 'application/sql;charset=utf-8',
-};
-
 function getOutputFileName(outputFormat: ConverterFormat, outputFileName: string) {
-  const extension = outputExtensions[outputFormat];
+  const extension = FORMAT_MODULES[outputFormat].extension;
 
   if (outputFileName.endsWith(`.${extension}`)) {
     return outputFileName;
@@ -77,6 +61,14 @@ export function OutputPanel({
     excelSheetNameRef.current = excelSheetName;
   }, [excelSheetName]);
 
+  useEffect(() => {
+    if (!copyStatus) {
+      return;
+    }
+    const timer = setTimeout(() => setCopyStatus(''), 2000);
+    return () => clearTimeout(timer);
+  }, [copyStatus]);
+
   async function downloadOutput() {
     if (!hasOutput) {
       return;
@@ -91,7 +83,7 @@ export function OutputPanel({
       ) as ArrayBuffer;
       saveBlob(
         new Blob([arrayBuffer], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          type: FORMAT_MODULES.excel.binaryMime,
         }),
         resolvedFileName,
       );
@@ -100,7 +92,7 @@ export function OutputPanel({
 
     saveBlob(
       new Blob([outputText], {
-        type: textMimeTypes[outputFormat],
+        type: FORMAT_MODULES[outputFormat].textMime,
       }),
       resolvedFileName,
     );

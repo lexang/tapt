@@ -60,7 +60,7 @@ export function SocialShare({ mode = 'full' }: SocialShareProps) {
   const links = buildLinks(currentUrl);
 
   function open(url: string) {
-    window.open(url, '_blank', 'width=600,height=500,noopener');
+    window.open(url, '_blank', 'width=600,height=500,noopener,noreferrer');
   }
 
   async function copyLink() {

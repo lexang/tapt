@@ -1,3 +1,5 @@
+import { FORMAT_LABELS, FORMAT_OPTIONS } from '@/lib/converters/formats';
+
 export type ConverterFormat = 'excel' | 'csv' | 'json' | 'markdown' | 'sql' | 'html';
 
 export type ConverterDefinition = {
@@ -9,21 +11,7 @@ export type ConverterDefinition = {
   description: string;
 };
 
-const formatLabels: Record<ConverterFormat, string> = {
-  excel: 'Excel',
-  csv: 'CSV',
-  json: 'JSON',
-  markdown: 'Markdown',
-  sql: 'SQL',
-  html: 'HTML',
-};
-
-export const FORMAT_LABELS = formatLabels;
-
-export const FORMAT_OPTIONS = (Object.keys(formatLabels) as ConverterFormat[]).map((format) => ({
-  label: formatLabels[format],
-  value: format,
-}));
+export { FORMAT_LABELS, FORMAT_OPTIONS };
 
 const allFormats: ConverterFormat[] = ['excel', 'csv', 'json', 'markdown', 'sql', 'html'];
 const converterPairs: Array<[ConverterFormat, ConverterFormat]> = [];
@@ -37,8 +25,8 @@ for (const inputFormat of allFormats) {
 }
 
 export const converterCatalog: ConverterDefinition[] = converterPairs.map(([inputFormat, outputFormat]) => {
-  const inputLabel = formatLabels[inputFormat];
-  const outputLabel = formatLabels[outputFormat];
+  const inputLabel = FORMAT_LABELS[inputFormat];
+  const outputLabel = FORMAT_LABELS[outputFormat];
   const slug = `${inputFormat}-to-${outputFormat}`;
 
   return {

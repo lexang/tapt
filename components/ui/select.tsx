@@ -2,7 +2,7 @@ import type { SelectHTMLAttributes } from 'react';
 
 type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   label: string;
-  options: Array<{ label: string; value: string }>;
+  options: ReadonlyArray<{ label: string; value: string }>;
 };
 
 export function Select({ label, options, className, ...props }: SelectProps) {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import type { ConverterFormat } from '@/lib/converters/catalog';
+import { FORMAT_MODULES } from '@/lib/converters/formats';
 
 type SourceFileInfo = {
   name: string;
@@ -17,7 +18,7 @@ type SourcePanelProps = {
   detectedFormat?: DetectedSourceFormat;
   error?: string;
   fileInfo?: SourceFileInfo;
-  formatOptions: Array<{ label: string; value: string }>;
+  formatOptions: ReadonlyArray<{ label: string; value: string }>;
   inputFormat: ConverterFormat;
   inputHint?: string;
   isReadingFile?: boolean;
@@ -28,24 +29,6 @@ type SourcePanelProps = {
   onParseAsDetectedFormat?: () => void;
   onSourceTextChange: (value: string) => void;
   onUseExample: () => void;
-};
-
-const acceptByFormat: Record<ConverterFormat, string> = {
-  excel: '.xlsx,.xls',
-  csv: '.csv,text/csv',
-  json: '.json,application/json',
-  markdown: '.md,.markdown,text/markdown',
-  sql: '.sql',
-  html: '.html,.htm,text/html',
-};
-
-const extensionByFormat: Record<ConverterFormat, string[]> = {
-  excel: ['xlsx', 'xls'],
-  csv: ['csv', 'tsv', 'txt'],
-  json: ['json'],
-  markdown: ['md', 'markdown'],
-  sql: ['sql'],
-  html: ['html', 'htm'],
 };
 
 function getPlaceholder(inputFormat: ConverterFormat): string {
@@ -134,7 +117,7 @@ export function SourcePanel({
         onDrop={handleDrop}
       >
         <input
-          accept={acceptByFormat[inputFormat]}
+          accept={FORMAT_MODULES[inputFormat].accept}
           aria-label="上传文件"
           name="source-file"
           onChange={handleFileChange}
@@ -144,9 +127,9 @@ export function SourcePanel({
         <small>
           {fileInfo
             ? `${fileInfo.name} · ${fileInfo.size}`
-            : `支持 ${inputFormat.toUpperCase()} 文件：.${extensionByFormat[inputFormat].join(' / .')}`}
+            : `支持 ${inputFormat.toUpperCase()} 文件：.${FORMAT_MODULES[inputFormat].extensionAliases.join(' / .')}`}
         </small>
-        {sourceName && !extensionByFormat[inputFormat].includes(getFileExtension(sourceName)) ? (
+        {sourceName && !FORMAT_MODULES[inputFormat].extensionAliases.includes(getFileExtension(sourceName)) ? (
           <small className="dropzone-warning">文件扩展名和当前格式不完全一致，请确认内容可以转换。</small>
         ) : null}
       </label>
