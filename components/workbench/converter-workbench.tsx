@@ -8,93 +8,25 @@ import {
   FORMAT_OPTIONS as formatOptions,
   type ConverterFormat,
 } from '@/lib/converters/catalog';
-import { FORMAT_MODULES, type GeneratorOptions } from '@/lib/converters/formats';
+import { FORMAT_MODULES } from '@/lib/converters/formats';
 import type { TableData } from '@/lib/table/types';
 import {
-  addColumn,
-  addRow,
-  clearTable,
-  createTableData,
-  deleteColumn,
-  deleteRow,
-  updateCell,
-  updateColumn,
-  transposeTable,
-  deleteEmptyRows,
-  deduplicateRows,
-  transformCase,
-} from '@/lib/table/ops';
+  createInitialState,
+  hasTableData,
+  parseSourceText,
+  reducer,
+} from '@/lib/workbench/state';
 import { SourcePanel } from '@/components/workbench/source-panel';
 import { EditorPanel } from '@/components/workbench/editor-panel';
 import { OutputPanel } from '@/components/workbench/output-panel';
 import { OptionsPanel } from '@/components/workbench/options-panel';
-
-type WorkbenchState = {
-  inputFormat: ConverterFormat;
-  outputFormat: ConverterFormat;
-  sourceText: string;
-  sourceName?: string;
-  parsedAsFormat?: ConverterFormat;
-  table: TableData;
-  outputText: string;
-  error?: string;
-  notice?: string;
-  options: GeneratorOptions;
-};
 
 type SourceFileInfo = {
   name: string;
   size: string;
 };
 
-type WorkbenchAction =
-  | { type: 'sourceTextChanged'; value: string }
-  | { type: 'sourceTextParsedAs'; inputFormat: ConverterFormat }
-  | { type: 'inputFormatChanged'; value: ConverterFormat }
-  | { type: 'outputFormatChanged'; value: ConverterFormat }
-  | { type: 'fileParsed'; table: TableData; fileName: string; sourceText?: string }
-  | { type: 'parseFailed'; message: string; sourceName?: string }
-  | { type: 'cellChanged'; rowIndex: number; columnIndex: number; value: string }
-  | { type: 'columnChanged'; columnIndex: number; value: string }
-  | { type: 'rowAdded' }
-  | { type: 'rowDeleted'; rowIndex: number }
-  | { type: 'columnAdded' }
-  | { type: 'columnDeleted'; columnIndex: number }
-  | { type: 'tableCleared' }
-  | { type: 'exampleLoaded' }
-  | { type: 'optionsChanged'; value: Partial<GeneratorOptions> }
-  | { type: 'tableTransposed' }
-  | { type: 'emptyRowsDeleted' }
-  | { type: 'rowsDeduplicated' }
-  | { type: 'caseTransformed'; caseType: 'upper' | 'lower' };
-
-const emptyTable = createTableData([], []);
-
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-
-const defaultOptions: GeneratorOptions = {
-  prettyJson: true,
-  jsonShape: 'array',
-  csvDelimiter: ',',
-  includeCsvHeader: true,
-  sqlTableName: 'data_table',
-  includeCreateTable: false,
-  sqlMultiRowInsert: false,
-  excelSheetName: 'Sheet1',
-};
-
-function parseSourceText(sourceText: string, inputFormat: ConverterFormat): TableData {
-  if (sourceText.trim().length === 0) {
-    return emptyTable;
-  }
-
-  return FORMAT_MODULES[inputFormat].parseText(sourceText);
-}
-
-function getParseErrorMessage(inputFormat: ConverterFormat): string {
-  const label = inputFormat.toUpperCase();
-  return `请检查 ${label} 数据格式，修正后会自动生成结果。`;
-}
 
 function formatFileSize(size: number) {
   if (size < 1024) {
@@ -200,229 +132,35 @@ function detectSourceFormat(sourceText: string): ConverterFormat | undefined {
   return undefined;
 }
 
-function hasTableData(table: TableData): boolean {
-  return table.columns.length > 0 || table.rows.length > 0;
+function readWithReader<T>(
+  file: File,
+  reader: FileReader,
+  kind: 'text' | 'arrayBuffer',
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    reader.onload = () => resolve(reader.result as T);
+    reader.onerror = () => reject(reader.error ?? new Error('文件读取失败'));
+    reader.onabort = () => reject(new DOMException('aborted', 'AbortError'));
+    if (kind === 'arrayBuffer') {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file);
+    }
+  });
 }
 
-function generateOutput(
-  table: TableData,
-  outputFormat: ConverterFormat,
-  options: GeneratorOptions,
-): string {
-  if (!hasTableData(table)) {
-    return '';
-  }
-
-  const generate = FORMAT_MODULES[outputFormat].generateText;
-  if (generate) {
-    return generate(table, options);
-  }
-
-  return 'Excel 文件已生成，可以下载使用。';
-}
-
-function withGeneratedOutput(state: WorkbenchState, table: TableData, nextState: Partial<WorkbenchState> = {}): WorkbenchState {
-  const outputFormat = nextState.outputFormat ?? state.outputFormat;
-  const options = nextState.options ?? state.options;
-  return {
-    ...state,
-    ...nextState,
-    table,
-    outputText: generateOutput(table, outputFormat, options),
-  };
-}
-
-function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState {
-  if (action.type === 'sourceTextChanged') {
-    try {
-      const table = parseSourceText(action.value, state.inputFormat);
-      return withGeneratedOutput(state, table, {
-        sourceText: action.value,
-        sourceName: undefined,
-        parsedAsFormat: undefined,
-        error: undefined,
-        notice: action.value.trim() ? '已根据输入内容更新结果。' : undefined,
-      });
-    } catch {
-      return {
-        ...state,
-        sourceText: action.value,
-        parsedAsFormat: undefined,
-        table: emptyTable,
-        outputText: '',
-        error: getParseErrorMessage(state.inputFormat),
-        notice: undefined,
-      };
-    }
-  }
-
-  if (action.type === 'sourceTextParsedAs') {
-    try {
-      const table = parseSourceText(state.sourceText, action.inputFormat);
-      return withGeneratedOutput(state, table, {
-        inputFormat: action.inputFormat,
-        error: undefined,
-        parsedAsFormat: action.inputFormat,
-        notice: `已按 ${formatLabels[action.inputFormat]} 解析。`,
-      });
-    } catch {
-      return {
-        ...state,
-        table: emptyTable,
-        outputText: '',
-        error: getParseErrorMessage(action.inputFormat),
-        notice: undefined,
-      };
-    }
-  }
-
-  if (action.type === 'inputFormatChanged') {
-    if (!state.sourceText.trim() && hasTableData(state.table)) {
-      return withGeneratedOutput(state, state.table, {
-        inputFormat: action.value,
-        error: undefined,
-        parsedAsFormat: undefined,
-        sourceName: undefined,
-        notice: `已切换为 ${formatLabels[action.value]} 输入。`,
-      });
-    }
-
-    try {
-      const table = parseSourceText(state.sourceText, action.value);
-      return withGeneratedOutput(state, table, {
-        inputFormat: action.value,
-        error: undefined,
-        parsedAsFormat: undefined,
-        sourceName: undefined,
-        notice: state.sourceText.trim() ? `已按 ${formatLabels[action.value]} 重新解析。` : undefined,
-      });
-    } catch {
-      return {
-        ...state,
-        inputFormat: action.value,
-        parsedAsFormat: undefined,
-        sourceName: undefined,
-        table: emptyTable,
-        outputText: '',
-        error: getParseErrorMessage(action.value),
-        notice: undefined,
-      };
-    }
-  }
-
-  if (action.type === 'outputFormatChanged') {
-    return withGeneratedOutput(state, state.table, {
-      outputFormat: action.value,
-      notice: hasTableData(state.table) ? `已生成 ${formatLabels[action.value]} 结果。` : undefined,
-    });
-  }
-
-  if (action.type === 'fileParsed') {
-    return withGeneratedOutput(state, action.table, {
-      sourceText: action.sourceText ?? '',
-      sourceName: action.fileName,
-      parsedAsFormat: undefined,
-      error: undefined,
-      notice: `已读取 ${action.fileName}。`,
-    });
-  }
-
-  if (action.type === 'parseFailed') {
-    return {
-      ...state,
-      sourceName: action.sourceName,
-      parsedAsFormat: undefined,
-      error: action.message,
-      notice: undefined,
-      outputText: '',
-    };
-  }
-
-  if (action.type === 'cellChanged') {
-    return withGeneratedOutput(state, updateCell(state.table, action.rowIndex, action.columnIndex, action.value), {
-      notice: '已更新转换结果。',
-    });
-  }
-
-  if (action.type === 'columnChanged') {
-    return withGeneratedOutput(state, updateColumn(state.table, action.columnIndex, action.value), {
-      notice: '已更新字段名称。',
-    });
-  }
-
-  if (action.type === 'rowAdded') {
-    return withGeneratedOutput(state, addRow(state.table), { notice: '已添加一行。' });
-  }
-
-  if (action.type === 'rowDeleted') {
-    return withGeneratedOutput(state, deleteRow(state.table, action.rowIndex), { notice: '已删除该行。' });
-  }
-
-  if (action.type === 'columnAdded') {
-    return withGeneratedOutput(state, addColumn(state.table), { notice: '已添加一列。' });
-  }
-
-  if (action.type === 'columnDeleted') {
-    return withGeneratedOutput(state, deleteColumn(state.table, action.columnIndex), { notice: '已删除该列。' });
-  }
-
-  if (action.type === 'tableCleared') {
-    return withGeneratedOutput(state, clearTable(), {
-      sourceText: '',
-      sourceName: undefined,
-      parsedAsFormat: undefined,
-      error: undefined,
-      notice: '已清空表格。',
-    });
-  }
-
-  if (action.type === 'tableTransposed') {
-    return withGeneratedOutput(state, transposeTable(state.table), { notice: '已转置表格。' });
-  }
-
-  if (action.type === 'emptyRowsDeleted') {
-    return withGeneratedOutput(state, deleteEmptyRows(state.table), { notice: '已删除空行。' });
-  }
-
-  if (action.type === 'rowsDeduplicated') {
-    return withGeneratedOutput(state, deduplicateRows(state.table), { notice: '已删除重复行。' });
-  }
-
-  if (action.type === 'caseTransformed') {
-    return withGeneratedOutput(state, transformCase(state.table, action.caseType), { notice: '已转换大小写。' });
-  }
-
-  if (action.type === 'exampleLoaded') {
-    try {
-      const sourceText = FORMAT_MODULES[state.inputFormat].exampleSource;
-      const table = parseSourceText(sourceText, state.inputFormat === 'excel' ? 'csv' : state.inputFormat);
-      return withGeneratedOutput(state, table, {
-        sourceText,
-        sourceName: undefined,
-        parsedAsFormat: undefined,
-        error: undefined,
-        notice: '已载入示例数据。',
-      });
-    } catch {
-      return state;
-    }
-  }
-
-  if (action.type === 'optionsChanged') {
-    const options = { ...state.options, ...action.value };
-    return withGeneratedOutput(state, state.table, { options, notice: '已按新选项生成结果。' });
-  }
-
-  return state;
-}
-
-async function readFileAsTable(file: File, inputFormat: ConverterFormat): Promise<{ table: TableData; sourceText?: string }> {
+async function readFileAsTable(
+  file: File,
+  inputFormat: ConverterFormat,
+  reader: FileReader,
+): Promise<{ table: TableData; sourceText?: string }> {
   if (inputFormat === 'excel' || /\.(xlsx|xls)$/i.test(file.name)) {
+    const buffer = await readWithReader<ArrayBuffer>(file, reader, 'arrayBuffer');
     const { parseExcel } = await import('@/lib/parsers/parse-excel');
-    return { table: parseExcel(await file.arrayBuffer()) };
+    return { table: parseExcel(buffer) };
   }
 
-  const sourceText = await file.text();
+  const sourceText = await readWithReader<string>(file, reader, 'text');
   return { table: parseSourceText(sourceText, inputFormat), sourceText };
 }
 
@@ -436,15 +174,12 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
   const initialOutputFormat = converter?.outputFormat ?? 'json';
   const [isReadingFile, setIsReadingFile] = useState(false);
   const [fileInfo, setFileInfo] = useState<SourceFileInfo | undefined>(undefined);
-  const [state, dispatch] = useReducer(reducer, {
-    inputFormat: initialInputFormat,
-    outputFormat: initialOutputFormat,
-    sourceText: '',
-    table: emptyTable,
-    outputText: '',
-    options: defaultOptions,
-  });
+  const [state, dispatch] = useReducer(
+    reducer,
+    createInitialState(initialInputFormat, initialOutputFormat),
+  );
   const readRequestIdRef = useRef(0);
+  const readerRef = useRef<FileReader | null>(null);
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sourceTextDraft, setSourceTextDraft] = useState('');
 
@@ -453,6 +188,14 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
       clearTimeout(parseTimerRef.current);
       parseTimerRef.current = null;
     }
+  }
+
+  function abortPendingRead() {
+    const reader = readerRef.current;
+    if (reader && reader.readyState === 1) {
+      reader.abort();
+    }
+    readerRef.current = null;
   }
 
   useEffect(() => {
@@ -464,6 +207,7 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
       if (parseTimerRef.current) {
         clearTimeout(parseTimerRef.current);
       }
+      abortPendingRead();
     };
   }, []);
 
@@ -488,6 +232,7 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
 
   async function handleFileSelected(file: File) {
     cancelPendingParse();
+    abortPendingRead();
 
     if (file.size > MAX_UPLOAD_BYTES) {
       dispatch({
@@ -502,9 +247,26 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
       return;
     }
 
+    const fileExt = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() ?? '' : '';
+    const acceptedExts = FORMAT_MODULES[state.inputFormat].extensionAliases;
+    if (fileExt && !acceptedExts.includes(fileExt)) {
+      dispatch({
+        type: 'parseFailed',
+        sourceName: file.name,
+        message: `.${fileExt} 不在当前 ${state.inputFormat.toUpperCase()} 格式可接受范围(.${acceptedExts.join(' / .')}),请切换输入格式或选择匹配的文件。`,
+      });
+      setFileInfo({
+        name: file.name,
+        size: formatFileSize(file.size),
+      });
+      return;
+    }
+
     const requestId = readRequestIdRef.current + 1;
     readRequestIdRef.current = requestId;
     const inputFormatSnapshot = state.inputFormat;
+    const reader = new FileReader();
+    readerRef.current = reader;
 
     setIsReadingFile(true);
     setFileInfo({
@@ -513,13 +275,16 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
     });
 
     try {
-      const result = await readFileAsTable(file, inputFormatSnapshot);
+      const result = await readFileAsTable(file, inputFormatSnapshot, reader);
       if (requestId !== readRequestIdRef.current) {
         return;
       }
       dispatch({ type: 'fileParsed', fileName: file.name, ...result });
-    } catch {
+    } catch (err) {
       if (requestId !== readRequestIdRef.current) {
+        return;
+      }
+      if (err instanceof DOMException && err.name === 'AbortError') {
         return;
       }
       dispatch({
@@ -530,12 +295,14 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
     } finally {
       if (requestId === readRequestIdRef.current) {
         setIsReadingFile(false);
+        readerRef.current = null;
       }
     }
   }
 
   function handleInputFormatChange(value: ConverterFormat) {
     cancelPendingParse();
+    abortPendingRead();
     readRequestIdRef.current += 1;
     setIsReadingFile(false);
     setFileInfo(undefined);
@@ -565,7 +332,6 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
           inputHint={inputHint}
           isReadingFile={isReadingFile}
           onInputFormatChange={handleInputFormatChange}
-          sourceName={state.sourceName}
           sourceText={sourceTextDraft}
           onFileSelected={handleFileSelected}
           onParseAsDetectedFormat={

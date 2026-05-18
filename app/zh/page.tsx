@@ -11,12 +11,12 @@ export const metadata = {
   title: '表格转换工具 - 免费在线表格转换器',
   description: '在线转换 Excel、CSV、JSON、Markdown、SQL 和 HTML 表格数据。全本地化运行，快速且安全。',
   alternates: {
-    canonical: '/',
+    canonical: '/zh',
   },
   openGraph: {
     title: '表格转换工具 - 免费在线表格转换器',
     description: '在线转换 Excel、CSV、JSON、Markdown、SQL 和 HTML 表格数据。全本地化运行，快速且安全。',
-    url: '/',
+    url: '/zh',
     type: 'website',
   },
   twitter: {

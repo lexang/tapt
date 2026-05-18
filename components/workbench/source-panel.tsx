@@ -22,7 +22,6 @@ type SourcePanelProps = {
   inputFormat: ConverterFormat;
   inputHint?: string;
   isReadingFile?: boolean;
-  sourceName?: string;
   sourceText: string;
   onFileSelected: (file: File) => void;
   onInputFormatChange: (value: ConverterFormat) => void;
@@ -39,10 +38,6 @@ function getPlaceholder(inputFormat: ConverterFormat): string {
   return `粘贴 ${inputFormat.toUpperCase()} 数据，转换结果会自动更新…`;
 }
 
-function getFileExtension(fileName: string) {
-  return fileName.split('.').pop()?.toLowerCase() ?? '';
-}
-
 export function SourcePanel({
   detectedFormat,
   error,
@@ -51,7 +46,6 @@ export function SourcePanel({
   inputFormat,
   inputHint,
   isReadingFile = false,
-  sourceName,
   sourceText,
   onFileSelected,
   onInputFormatChange,
@@ -129,9 +123,6 @@ export function SourcePanel({
             ? `${fileInfo.name} · ${fileInfo.size}`
             : `支持 ${inputFormat.toUpperCase()} 文件：.${FORMAT_MODULES[inputFormat].extensionAliases.join(' / .')}`}
         </small>
-        {sourceName && !FORMAT_MODULES[inputFormat].extensionAliases.includes(getFileExtension(sourceName)) ? (
-          <small className="dropzone-warning">文件扩展名和当前格式不完全一致，请确认内容可以转换。</small>
-        ) : null}
       </label>
 
       <label className="field">
