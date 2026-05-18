@@ -1,51 +1,89 @@
-import { createInitialState, hasTableData, parseSourceText, reducer } from '@/lib/workbench/state';
+import {
+  createInitialState,
+  emptyTable,
+  hasTableData,
+  parseSourceText,
+  reducer,
+} from '@/lib/workbench/state';
 
 const initial = createInitialState('csv', 'json');
 
 describe('workbench reducer', () => {
-  it('sourceTextChanged 解析有效 CSV 后生成 JSON 输出', () => {
+  it('sourceTextChanged 只更新 sourceText,不再同步 parse', () => {
     const next = reducer(initial, {
       type: 'sourceTextChanged',
       value: 'name,age\nAda,36',
     });
-    expect(next.table.columns).toEqual(['name', 'age']);
-    expect(next.table.rows).toHaveLength(1);
-    expect(next.outputText).toContain('"name"');
-    expect(next.outputText).toContain('"Ada"');
+    expect(next.sourceText).toBe('name,age\nAda,36');
+    expect(next.table).toBe(initial.table);
+    expect(next.outputText).toBe('');
     expect(next.error).toBeUndefined();
   });
 
-  it('sourceTextChanged 输入合法但 JSON 输入格式下非 JSON 文本会进 error 分支', () => {
-    const jsonInitial = createInitialState('json', 'csv');
-    const next = reducer(jsonInitial, { type: 'sourceTextChanged', value: 'not-json' });
-    expect(next.error).toMatch(/JSON/);
-    expect(hasTableData(next.table)).toBe(false);
-    expect(next.outputText).toBe('');
+  it('parsedTableApplied 设 table、生成 outputText、可选 notice', () => {
+    const parsed = parseSourceText('name,age\nAda,36', 'csv');
+    const next = reducer(initial, {
+      type: 'parsedTableApplied',
+      table: parsed,
+      notice: '已根据输入内容更新结果。',
+    });
+    expect(next.table.columns).toEqual(['name', 'age']);
+    expect(next.outputText).toContain('"Ada"');
+    expect(next.notice).toContain('已根据输入内容更新结果');
   });
 
-  it('inputFormatChanged 在 sourceText 为空但表格已有数据时,保留表格只切输入格式', () => {
-    const seeded = reducer(initial, { type: 'sourceTextChanged', value: 'name,age\nAda,36' });
-    const stagedNoSource = { ...seeded, sourceText: '' };
-    const switched = reducer(stagedNoSource, { type: 'inputFormatChanged', value: 'json' });
-    expect(switched.inputFormat).toBe('json');
-    expect(switched.table.columns).toEqual(['name', 'age']);
-    expect(switched.notice).toContain('JSON');
+  it('parsedTableApplied 可同时落 sourceName + sourceText(文件路径用)', () => {
+    const parsed = parseSourceText('name,age\nAda,36', 'csv');
+    const next = reducer(initial, {
+      type: 'parsedTableApplied',
+      table: parsed,
+      sourceName: 'sample.csv',
+      sourceText: 'name,age\nAda,36',
+      notice: '已读取 sample.csv。',
+    });
+    expect(next.sourceName).toBe('sample.csv');
+    expect(next.sourceText).toBe('name,age\nAda,36');
   });
 
-  it('outputFormatChanged 切到 CSV 时用 CSV 生成器重新输出', () => {
+  it('parseFailedForSource 清空 table 和 outputText,落 error', () => {
+    const seeded = reducer(initial, {
+      type: 'parsedTableApplied',
+      table: parseSourceText('a,b\n1,2', 'csv'),
+    });
+    const failed = reducer(seeded, {
+      type: 'parseFailedForSource',
+      message: '请检查 CSV 数据格式。',
+    });
+    expect(failed.error).toContain('CSV');
+    expect(hasTableData(failed.table)).toBe(false);
+    expect(failed.outputText).toBe('');
+  });
+
+  it('inputFormatChanged 只 set inputFormat,不重新 parse', () => {
+    const seeded = reducer(initial, {
+      type: 'parsedTableApplied',
+      table: parseSourceText('a,b\n1,2', 'csv'),
+    });
+    const next = reducer(seeded, { type: 'inputFormatChanged', value: 'json' });
+    expect(next.inputFormat).toBe('json');
+    expect(next.table).toBe(seeded.table);
+    expect(next.outputText).toBe(seeded.outputText);
+  });
+
+  it('outputFormatChanged 重新跑 generateText', () => {
     const withData = reducer(initial, {
-      type: 'sourceTextChanged',
-      value: 'name,age\nAda,36',
+      type: 'parsedTableApplied',
+      table: parseSourceText('name,age\nAda,36', 'csv'),
     });
     const switched = reducer(withData, { type: 'outputFormatChanged', value: 'csv' });
     expect(switched.outputFormat).toBe('csv');
     expect(switched.outputText.split('\n')[0]).toBe('name,age');
   });
 
-  it('optionsChanged 改 prettyJson 后重新生成输出', () => {
+  it('optionsChanged 用新选项重新生成 outputText', () => {
     const withData = reducer(initial, {
-      type: 'sourceTextChanged',
-      value: 'name,age\nAda,36',
+      type: 'parsedTableApplied',
+      table: parseSourceText('name,age\nAda,36', 'csv'),
     });
     const compact = reducer(withData, {
       type: 'optionsChanged',
@@ -55,7 +93,7 @@ describe('workbench reducer', () => {
     expect(compact.outputText).not.toContain('\n  "');
   });
 
-  it('parseFailed 保留 sourceName 并清 outputText', () => {
+  it('parseFailed(文件路径)保留 sourceName 并清 outputText', () => {
     const next = reducer(initial, {
       type: 'parseFailed',
       message: '解析失败',
@@ -66,11 +104,29 @@ describe('workbench reducer', () => {
     expect(next.outputText).toBe('');
   });
 
-  it('exampleLoaded 用当前输入格式的内置示例填入', () => {
-    const next = reducer(initial, { type: 'exampleLoaded' });
-    expect(next.sourceText).toContain('Ada');
-    expect(hasTableData(next.table)).toBe(true);
-    expect(next.notice).toContain('示例');
+  it('exampleSourceLoaded 把示例文本写入 sourceText,table 由后续 parse 填', () => {
+    const next = reducer(initial, {
+      type: 'exampleSourceLoaded',
+      value: 'name,age\nAda,36',
+    });
+    expect(next.sourceText).toBe('name,age\nAda,36');
+    expect(next.table).toBe(initial.table);
+  });
+
+  it('noticeUpdated 单独改 notice 不影响其他字段', () => {
+    const next = reducer(initial, { type: 'noticeUpdated', notice: '已切换为 JSON 输入。' });
+    expect(next.notice).toContain('JSON');
+    expect(next.table).toBe(initial.table);
+  });
+
+  it('parsedTableApplied 对 emptyTable 输入会清 outputText', () => {
+    const seeded = reducer(initial, {
+      type: 'parsedTableApplied',
+      table: parseSourceText('a,b\n1,2', 'csv'),
+    });
+    const cleared = reducer(seeded, { type: 'parsedTableApplied', table: emptyTable });
+    expect(hasTableData(cleared.table)).toBe(false);
+    expect(cleared.outputText).toBe('');
   });
 });
 

@@ -12,7 +12,7 @@ import {
   deduplicateRows,
   transformCase,
 } from '@/lib/table/ops';
-import { FORMAT_LABELS, type ConverterFormat } from '@/lib/converters/catalog';
+import type { ConverterFormat } from '@/lib/converters/catalog';
 import { FORMAT_MODULES, type GeneratorOptions } from '@/lib/converters/formats';
 import type { TableData } from '@/lib/table/types';
 
@@ -34,7 +34,14 @@ export type WorkbenchAction =
   | { type: 'sourceTextParsedAs'; inputFormat: ConverterFormat }
   | { type: 'inputFormatChanged'; value: ConverterFormat }
   | { type: 'outputFormatChanged'; value: ConverterFormat }
-  | { type: 'fileParsed'; table: TableData; fileName: string; sourceText?: string }
+  | {
+      type: 'parsedTableApplied';
+      table: TableData;
+      notice?: string;
+      sourceName?: string;
+      sourceText?: string;
+    }
+  | { type: 'parseFailedForSource'; message: string }
   | { type: 'parseFailed'; message: string; sourceName?: string }
   | { type: 'cellChanged'; rowIndex: number; columnIndex: number; value: string }
   | { type: 'columnChanged'; columnIndex: number; value: string }
@@ -43,7 +50,8 @@ export type WorkbenchAction =
   | { type: 'columnAdded' }
   | { type: 'columnDeleted'; columnIndex: number }
   | { type: 'tableCleared' }
-  | { type: 'exampleLoaded' }
+  | { type: 'exampleSourceLoaded'; value: string }
+  | { type: 'noticeUpdated'; notice?: string }
   | { type: 'optionsChanged'; value: Partial<GeneratorOptions> }
   | { type: 'tableTransposed' }
   | { type: 'emptyRowsDeleted' }
@@ -75,7 +83,7 @@ export function parseSourceText(sourceText: string, inputFormat: ConverterFormat
   return FORMAT_MODULES[inputFormat].parseText(sourceText);
 }
 
-function getParseErrorMessage(inputFormat: ConverterFormat): string {
+export function getParseErrorMessage(inputFormat: ConverterFormat): string {
   const label = inputFormat.toUpperCase();
   return `请检查 ${label} 数据格式，修正后会自动生成结果。`;
 }
@@ -128,97 +136,62 @@ export function createInitialState(
 
 export function reducer(state: WorkbenchState, action: WorkbenchAction): WorkbenchState {
   if (action.type === 'sourceTextChanged') {
-    try {
-      const table = parseSourceText(action.value, state.inputFormat);
-      return withGeneratedOutput(state, table, {
-        sourceText: action.value,
-        sourceName: undefined,
-        parsedAsFormat: undefined,
-        error: undefined,
-        notice: action.value.trim() ? '已根据输入内容更新结果。' : undefined,
-      });
-    } catch {
-      return {
-        ...state,
-        sourceText: action.value,
-        parsedAsFormat: undefined,
-        table: emptyTable,
-        outputText: '',
-        error: getParseErrorMessage(state.inputFormat),
-        notice: undefined,
-      };
-    }
+    return {
+      ...state,
+      sourceText: action.value,
+      sourceName: undefined,
+      parsedAsFormat: undefined,
+      error: undefined,
+    };
   }
 
   if (action.type === 'sourceTextParsedAs') {
-    try {
-      const table = parseSourceText(state.sourceText, action.inputFormat);
-      return withGeneratedOutput(state, table, {
-        inputFormat: action.inputFormat,
-        error: undefined,
-        parsedAsFormat: action.inputFormat,
-        notice: `已按 ${FORMAT_LABELS[action.inputFormat]} 解析。`,
-      });
-    } catch {
-      return {
-        ...state,
-        table: emptyTable,
-        outputText: '',
-        error: getParseErrorMessage(action.inputFormat),
-        notice: undefined,
-      };
-    }
+    return {
+      ...state,
+      inputFormat: action.inputFormat,
+      parsedAsFormat: action.inputFormat,
+      error: undefined,
+    };
   }
 
   if (action.type === 'inputFormatChanged') {
-    if (!state.sourceText.trim() && hasTableData(state.table)) {
-      return withGeneratedOutput(state, state.table, {
-        inputFormat: action.value,
-        error: undefined,
-        parsedAsFormat: undefined,
-        sourceName: undefined,
-        notice: `已切换为 ${FORMAT_LABELS[action.value]} 输入。`,
-      });
-    }
-
-    try {
-      const table = parseSourceText(state.sourceText, action.value);
-      return withGeneratedOutput(state, table, {
-        inputFormat: action.value,
-        error: undefined,
-        parsedAsFormat: undefined,
-        sourceName: undefined,
-        notice: state.sourceText.trim() ? `已按 ${FORMAT_LABELS[action.value]} 重新解析。` : undefined,
-      });
-    } catch {
-      return {
-        ...state,
-        inputFormat: action.value,
-        parsedAsFormat: undefined,
-        sourceName: undefined,
-        table: emptyTable,
-        outputText: '',
-        error: getParseErrorMessage(action.value),
-        notice: undefined,
-      };
-    }
+    return {
+      ...state,
+      inputFormat: action.value,
+      sourceName: undefined,
+      parsedAsFormat: undefined,
+      error: undefined,
+    };
   }
 
   if (action.type === 'outputFormatChanged') {
     return withGeneratedOutput(state, state.table, {
       outputFormat: action.value,
-      notice: hasTableData(state.table) ? `已生成 ${FORMAT_LABELS[action.value]} 结果。` : undefined,
     });
   }
 
-  if (action.type === 'fileParsed') {
-    return withGeneratedOutput(state, action.table, {
-      sourceText: action.sourceText ?? '',
-      sourceName: action.fileName,
-      parsedAsFormat: undefined,
+  if (action.type === 'parsedTableApplied') {
+    const next: Partial<WorkbenchState> = {
       error: undefined,
-      notice: `已读取 ${action.fileName}。`,
-    });
+      notice: action.notice,
+    };
+    if (action.sourceText !== undefined) {
+      next.sourceText = action.sourceText;
+    }
+    if (action.sourceName !== undefined) {
+      next.sourceName = action.sourceName;
+    }
+    return withGeneratedOutput(state, action.table, next);
+  }
+
+  if (action.type === 'parseFailedForSource') {
+    return {
+      ...state,
+      table: emptyTable,
+      outputText: '',
+      error: action.message,
+      notice: undefined,
+    };
   }
 
   if (action.type === 'parseFailed') {
@@ -286,20 +259,18 @@ export function reducer(state: WorkbenchState, action: WorkbenchAction): Workben
     return withGeneratedOutput(state, transformCase(state.table, action.caseType), { notice: '已转换大小写。' });
   }
 
-  if (action.type === 'exampleLoaded') {
-    try {
-      const sourceText = FORMAT_MODULES[state.inputFormat].exampleSource;
-      const table = parseSourceText(sourceText, state.inputFormat === 'excel' ? 'csv' : state.inputFormat);
-      return withGeneratedOutput(state, table, {
-        sourceText,
-        sourceName: undefined,
-        parsedAsFormat: undefined,
-        error: undefined,
-        notice: '已载入示例数据。',
-      });
-    } catch {
-      return state;
-    }
+  if (action.type === 'exampleSourceLoaded') {
+    return {
+      ...state,
+      sourceText: action.value,
+      sourceName: undefined,
+      parsedAsFormat: undefined,
+      error: undefined,
+    };
+  }
+
+  if (action.type === 'noticeUpdated') {
+    return { ...state, notice: action.notice };
   }
 
   if (action.type === 'optionsChanged') {

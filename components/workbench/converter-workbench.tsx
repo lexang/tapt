@@ -12,10 +12,12 @@ import { FORMAT_MODULES } from '@/lib/converters/formats';
 import type { TableData } from '@/lib/table/types';
 import {
   createInitialState,
+  emptyTable,
+  getParseErrorMessage,
   hasTableData,
-  parseSourceText,
   reducer,
 } from '@/lib/workbench/state';
+import { parseExcelInWorker, parseTextInWorker } from '@/lib/workbench/parse-client';
 import { SourcePanel } from '@/components/workbench/source-panel';
 import { EditorPanel } from '@/components/workbench/editor-panel';
 import { OutputPanel } from '@/components/workbench/output-panel';
@@ -149,21 +151,6 @@ function readWithReader<T>(
   });
 }
 
-async function readFileAsTable(
-  file: File,
-  inputFormat: ConverterFormat,
-  reader: FileReader,
-): Promise<{ table: TableData; sourceText?: string }> {
-  if (inputFormat === 'excel' || /\.(xlsx|xls)$/i.test(file.name)) {
-    const buffer = await readWithReader<ArrayBuffer>(file, reader, 'arrayBuffer');
-    const { parseExcel } = await import('@/lib/parsers/parse-excel');
-    return { table: parseExcel(buffer) };
-  }
-
-  const sourceText = await readWithReader<string>(file, reader, 'text');
-  return { table: parseSourceText(sourceText, inputFormat), sourceText };
-}
-
 type ConverterWorkbenchProps = {
   initialConverterId?: string;
 };
@@ -180,8 +167,10 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
   );
   const readRequestIdRef = useRef(0);
   const readerRef = useRef<FileReader | null>(null);
+  const parseRequestIdRef = useRef(0);
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sourceTextDraft, setSourceTextDraft] = useState('');
+  const [isParsing, setIsParsing] = useState(false);
 
   function cancelPendingParse() {
     if (parseTimerRef.current) {
@@ -198,6 +187,51 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
     readerRef.current = null;
   }
 
+  function invalidatePendingParse() {
+    parseRequestIdRef.current += 1;
+  }
+
+  async function parseAndApply(
+    sourceText: string,
+    inputFormat: ConverterFormat,
+    extras: { notice?: string; sourceName?: string; sourceTextOverride?: string } = {},
+  ): Promise<void> {
+    const id = ++parseRequestIdRef.current;
+    if (!sourceText.trim()) {
+      dispatch({
+        type: 'parsedTableApplied',
+        table: emptyTable,
+        notice: extras.notice,
+        sourceName: extras.sourceName,
+        sourceText: extras.sourceTextOverride,
+      });
+      return;
+    }
+    setIsParsing(true);
+    try {
+      const table = await parseTextInWorker(sourceText, inputFormat);
+      if (id !== parseRequestIdRef.current) {
+        return;
+      }
+      dispatch({
+        type: 'parsedTableApplied',
+        table,
+        notice: extras.notice,
+        sourceName: extras.sourceName,
+        sourceText: extras.sourceTextOverride,
+      });
+    } catch {
+      if (id !== parseRequestIdRef.current) {
+        return;
+      }
+      dispatch({ type: 'parseFailedForSource', message: getParseErrorMessage(inputFormat) });
+    } finally {
+      if (id === parseRequestIdRef.current) {
+        setIsParsing(false);
+      }
+    }
+  }
+
   useEffect(() => {
     setSourceTextDraft(state.sourceText);
   }, [state.sourceText]);
@@ -212,8 +246,14 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
   }, []);
 
   const canEditTable = hasTableData(state.table);
-  const statusLabel = state.error ? '需要检查' : canEditTable ? '已就绪' : '等待数据';
-  const statusClass = state.error ? 'status-danger' : canEditTable ? 'status-ready' : '';
+  const statusLabel = state.error
+    ? '需要检查'
+    : isParsing
+      ? '正在解析'
+      : canEditTable
+        ? '已就绪'
+        : '等待数据';
+  const statusClass = state.error ? 'status-danger' : canEditTable && !isParsing ? 'status-ready' : '';
   const inputHint = state.error ? undefined : getSourceHint(state.sourceText, state.inputFormat, state.table);
   const matchingConverter = converterCatalog.find(
     (catalogItem) => catalogItem.inputFormat === state.inputFormat && catalogItem.outputFormat === state.outputFormat,
@@ -233,6 +273,7 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
   async function handleFileSelected(file: File) {
     cancelPendingParse();
     abortPendingRead();
+    invalidatePendingParse();
 
     if (file.size > MAX_UPLOAD_BYTES) {
       dispatch({
@@ -275,11 +316,33 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
     });
 
     try {
-      const result = await readFileAsTable(file, inputFormatSnapshot, reader);
+      let table: TableData;
+      let sourceText: string | undefined;
+      if (inputFormatSnapshot === 'excel' || /\.(xlsx|xls)$/i.test(file.name)) {
+        const buffer = await readWithReader<ArrayBuffer>(file, reader, 'arrayBuffer');
+        if (requestId !== readRequestIdRef.current) {
+          return;
+        }
+        table = await parseExcelInWorker(buffer);
+      } else {
+        sourceText = await readWithReader<string>(file, reader, 'text');
+        if (requestId !== readRequestIdRef.current) {
+          return;
+        }
+        table = sourceText.trim()
+          ? await parseTextInWorker(sourceText, inputFormatSnapshot)
+          : emptyTable;
+      }
       if (requestId !== readRequestIdRef.current) {
         return;
       }
-      dispatch({ type: 'fileParsed', fileName: file.name, ...result });
+      dispatch({
+        type: 'parsedTableApplied',
+        table,
+        sourceName: file.name,
+        sourceText: sourceText ?? '',
+        notice: `已读取 ${file.name}。`,
+      });
     } catch (err) {
       if (requestId !== readRequestIdRef.current) {
         return;
@@ -310,6 +373,16 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
       dispatch({ type: 'sourceTextChanged', value: sourceTextDraft });
     }
     dispatch({ type: 'inputFormatChanged', value });
+
+    const text = sourceTextDraft;
+    if (!text.trim() && hasTableData(state.table)) {
+      invalidatePendingParse();
+      dispatch({ type: 'noticeUpdated', notice: `已切换为 ${formatLabels[value]} 输入。` });
+      return;
+    }
+    parseAndApply(text, value, {
+      notice: text.trim() ? `已按 ${formatLabels[value]} 重新解析。` : undefined,
+    });
   }
 
   function handleOutputFormatChange(value: ConverterFormat) {
@@ -342,6 +415,9 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
                     dispatch({ type: 'sourceTextChanged', value: sourceTextDraft });
                   }
                   dispatch({ type: 'sourceTextParsedAs', inputFormat: detectedFormat.format });
+                  parseAndApply(sourceTextDraft, detectedFormat.format, {
+                    notice: `已按 ${formatLabels[detectedFormat.format]} 解析。`,
+                  });
                 }
               : undefined
           }
@@ -349,14 +425,25 @@ export function ConverterWorkbench({ initialConverterId = 'excel-to-json' }: Con
             setFileInfo(undefined);
             setSourceTextDraft(value);
             cancelPendingParse();
+            invalidatePendingParse();
             parseTimerRef.current = setTimeout(() => {
               dispatch({ type: 'sourceTextChanged', value });
+              parseAndApply(value, state.inputFormat, {
+                notice: value.trim() ? '已根据输入内容更新结果。' : undefined,
+              });
             }, 200);
           }}
           onUseExample={() => {
             cancelPendingParse();
+            abortPendingRead();
             setFileInfo(undefined);
-            dispatch({ type: 'exampleLoaded' });
+            const exampleSource = FORMAT_MODULES[state.inputFormat].exampleSource;
+            dispatch({ type: 'exampleSourceLoaded', value: exampleSource });
+            parseAndApply(
+              exampleSource,
+              state.inputFormat === 'excel' ? 'csv' : state.inputFormat,
+              { notice: '已载入示例数据。', sourceTextOverride: exampleSource },
+            );
           }}
         />
 
